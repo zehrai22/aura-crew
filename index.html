@@ -23,7 +23,6 @@
     <div class="topbar-meta">
       <span class="badge badge-synthetic" id="synthetic-badge" title="The history includes made-up demo entries from data.js">Synthetic demo data</span>
       <span class="badge badge-muted">Decision support only</span>
-      <a class="badge badge-link" href="#hazards">Hazards ↓</a>
     </div>
   </header>
 
@@ -49,13 +48,14 @@
         <div class="scanline" aria-hidden="true"></div>
         <div class="sim-banner" id="sim-banner" hidden>Simulation · not real data</div>
       </div>
-      <p class="hint">Select a body system to open its indicator panel.</p>
+      <p class="hint">Select a body system to see what to do now.</p>
+      <div class="hz-legend" id="hz-legend" aria-label="Possible contributing hazards. Select one to highlight the body systems it may affect."></div>
       <div class="whatif" aria-labelledby="whatif-title">
         <div class="whatif-head">
           <h3 id="whatif-title">What-if scenarios</h3>
           <button type="button" class="link-btn" id="whatif-reset" hidden>Reset</button>
         </div>
-        <p class="meta">Applies illustrative offsets to the latest check-in to show how indicators may shift. Nothing is saved.</p>
+        <p class="meta">See how today's indicators may shift. Nothing is saved.</p>
         <div class="whatif-toggles" id="whatif"></div>
       </div>
     </section>
@@ -110,7 +110,7 @@
             <button type="button" class="btn btn-ghost" id="profile-save">Save</button>
           </div>
           <p class="field-note" id="profile-note">—</p>
-          <p class="field-note">Used only to show BMI in the metabolism panel. Not a daily indicator. Use your preflight height.</p>
+          <p class="field-note">Used only for BMI. Use your preflight height.</p>
         </details>
         <label class="field field-wide">
           <span>Date</span>
@@ -151,7 +151,7 @@
             <label><input type="radio" name="visionChange" value="1"><span>1 <small>Slight</small></span></label>
             <label><input type="radio" name="visionChange" value="2"><span>2 <small>Noticeable</small></span></label>
           </div>
-          <p class="field-note">Self-checks only, not a diagnosis. Severe dizziness or a noticeable vision change shows red: contact your flight surgeon.</p>
+          <p class="field-note">Self-checks, not a diagnosis. Severe dizziness or a noticeable change: contact your flight surgeon.</p>
         </fieldset>
         <fieldset class="field-group">
           <legend>Breathing</legend>
@@ -177,7 +177,7 @@
           <legend>Nutrition</legend>
           <label class="field"><span>Body mass <em>kg · optional</em></span><input type="number" name="bodyMass" inputmode="decimal" placeholder="not measured"></label>
           <label class="field"><span>Calories today <em>kcal</em></span><input type="number" name="calories" inputmode="numeric" required></label>
-          <p class="field-note">Body mass comes from the mass-measurement device, not a scale; enter it on days it is measured.</p>
+          <p class="field-note">Body mass from the mass-measurement device, on days it is measured.</p>
         </fieldset>
         <fieldset class="field-group">
           <legend>Exercise today <em>minutes</em></legend>
@@ -189,7 +189,7 @@
           <legend>Bone & kidney markers <em>optional · % vs preflight</em></legend>
           <label class="field"><span>Urinary calcium</span><input type="number" name="urinaryCalcium" inputmode="numeric" placeholder="not measured"></label>
           <label class="field"><span>Bone resorption</span><input type="number" name="boneResorption" inputmode="numeric" placeholder="not measured"></label>
-          <p class="field-note">From periodic urine or blood samples, not measured daily. Leave blank unless your medical team shared a new result. Urinary calcium is used by both bones & muscle and urinary & renal.</p>
+          <p class="field-note">Only when the medical team shares a new sample result.</p>
         </fieldset>
         <fieldset class="field-wide alertness-field">
           <legend>Cognitive check <em>optional · reaction + memory, 2 min</em></legend>
@@ -208,22 +208,11 @@
           <button type="submit" class="btn btn-primary">Record check-in</button>
           <button type="button" class="btn btn-ghost" id="clear-user">Clear my entries</button>
         </div>
-        <p class="fineprint">Entries are stored only in this browser (localStorage). An entry for a date replaces the synthetic entry for that date.</p>
+        <p class="fineprint">Saved only in this browser. Your entry replaces the synthetic one for that date.</p>
       </form>
     </section>
   </main>
 
-  <!-- Hazards -->
-  <section class="hazards" id="hazards" aria-labelledby="hazards-title">
-    <div class="panel">
-      <div class="panel-head">
-        <h2 id="hazards-title">Spaceflight hazards</h2>
-        <span class="meta">Source: <a href="https://www.nasa.gov/hrp/hazards/" target="_blank" rel="noopener">NASA HRP · 5 Hazards of Human Spaceflight</a></span>
-      </div>
-      <p class="hazards-intro">NASA's Human Research Program groups spaceflight risks into five hazards. Each card lists the daily indicators the hazard <strong>may affect</strong>, with their latest status. These are possible influences, not certain cause and effect.</p>
-      <div class="hazard-grid" id="hazard-grid"></div>
-    </div>
-  </section>
 
   <!-- Region detail drawer -->
   <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
@@ -250,9 +239,9 @@
       </div>
       <div class="rt-body">
         <div id="rt-intro">
-          <p>Two short parts, about 2 minutes in total. Results are compared with <strong>your own baseline</strong> (the average of your first 3 completed checks), not with population norms.</p>
-          <p><strong>Part 1 · Reaction (1 min).</strong> Inspired by the psychomotor vigilance test (PVT) used on the ISS. Tap the circle or press <kbd>Space</kbd> as soon as it lights up. The wait is random, so don't anticipate.</p>
-          <p class="meta">This is a performance check, not an IQ test and not a validated clinical test. Run it at the same time each day, in a quiet spot. In microgravity, brace yourself with a foot restraint and hold the device steady.</p>
+          <p>Two 1-minute parts, compared with <strong>your own baseline</strong> (your first 3 checks).</p>
+          <p><strong>Part 1 · Reaction.</strong> Tap the circle or press <kbd>Space</kbd> as soon as it lights up.</p>
+          <p class="meta">A performance check, not an IQ test. Brace with a foot restraint; same time each day.</p>
           <button type="button" class="btn btn-primary" id="rt-start">Start part 1 · 1 minute</button>
         </div>
         <div id="rt-run" hidden>
@@ -272,8 +261,8 @@
           </div>
         </div>
         <div id="mem-intro" hidden>
-          <p><strong>Part 2 · Working memory (1 min).</strong> Digits appear one at a time. When you see <strong>?</strong>, type them back in the same order and press Enter. Get one right and the next sequence is one digit longer; miss one and it gets one shorter.</p>
-          <p class="meta">Records your accuracy and your longest correct sequence. A performance check, not an IQ test.</p>
+          <p><strong>Part 2 · Working memory.</strong> Watch the digits, then type them back in order and press Enter. Sequences get longer when you are right.</p>
+          <p class="meta">A performance check, not an IQ test.</p>
           <button type="button" class="btn btn-primary" id="mem-start">Start part 2 · 1 minute</button>
         </div>
         <div id="mem-run" hidden>
@@ -301,7 +290,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <footer class="footer">
-    <p>AURA-CREW is a NASA Space Apps 2026 challenge prototype. It shows <strong>indicators</strong> for <strong>decision support only</strong> and does not diagnose. Confirm everything with your medical officer.</p>
+    <p>AURA-CREW is a NASA Space Apps 2026 prototype. It shows <strong>indicators</strong> for <strong>decision support only</strong>, not a diagnosis.</p>
   </footer>
 
   <script src="config.js"></script>

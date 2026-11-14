@@ -19,6 +19,7 @@
  *                     'baseline'  = performance of the recent tests versus the
  *                     astronaut's own baseline (see `cognitive`)
  *   refText         : custom wording for the reference shown next to a value
+ *   redText         : custom wording for the "attention" limit (flight-surgeon trigger)
  *
  * These values are decision-support placeholders, not clinical criteria.
  */
@@ -214,6 +215,7 @@ window.AURA_CONFIG = {
       green: [-15, 100],
       yellow: [-30, 100],
       refText: 'within 15% of baseline',
+      redText: 'reaction speed more than 30% below your baseline',
       // Reaction time: lower is better, so a slower time counts as a drop.
       derived: { type: 'baseline', from: ['reactionMedian'], better: 'lower' },
       input: { min: -100, max: 100, step: 1 }
@@ -227,6 +229,7 @@ window.AURA_CONFIG = {
       green: [-15, 100],
       yellow: [-30, 100],
       refText: 'within 15% of baseline',
+      redText: 'working memory more than 30% below your baseline',
       // Uses the larger drop of accuracy and longest correct sequence.
       derived: { type: 'baseline', from: ['memAccuracy', 'memSpan'], better: 'higher' },
       input: { min: -100, max: 100, step: 1 }
@@ -265,7 +268,7 @@ window.AURA_CONFIG = {
     // ASSUMPTION - general adult reference ranges, to be reviewed against NASA HRP sources
     resistive7d: {
       label: 'Resistive exercise, 7-day total',
-      short: 'Resistive 7 d',
+      short: 'Resistive exercise (7 d)',
       unit: 'min',
       decimals: 0,
       green: [240, 2100],
@@ -275,7 +278,7 @@ window.AURA_CONFIG = {
     },
     aerobic7d: {
       label: 'Aerobic exercise, 7-day total',
-      short: 'Aerobic 7 d',
+      short: 'Aerobic exercise (7 d)',
       unit: 'min',
       decimals: 0,
       green: [180, 2100],
@@ -343,6 +346,7 @@ window.AURA_CONFIG = {
       signed: true,
       green: [-3, 100],
       yellow: [-5, 100],
+      redText: 'body mass down more than 5% in 7 days',
       derived: { from: 'bodyMass', type: 'pctChange', days: 7 },
       input: { min: -100, max: 100, step: 0.1 }
     },

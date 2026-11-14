@@ -548,10 +548,10 @@
    * Rendering
    * ------------------------------------------------------------------ */
   var OVERALL_COPY = {
-    green: 'All tracked indicators are within the configured reference ranges.',
-    yellow: 'Some indicators are outside the reference range. Keep monitoring and review the flagged systems.',
-    red: 'One or more indicators need attention. Review the flagged systems and consider contacting your flight surgeon.',
-    unknown: 'No check-in data yet. Record a daily check-in to see indicator status.'
+    green: 'All indicators are within range.',
+    yellow: 'Some indicators need monitoring.',
+    red: 'An indicator needs attention. Consider contacting your flight surgeon.',
+    unknown: 'Record a check-in to see your status.'
   };
 
   /* ------------------------------------------------------------------ *
@@ -752,7 +752,8 @@
     });
 
     renderPlan(latest);
-    renderHazards(latest);
+    renderHazards();
+    applyHazardFocus();
     if (openKey) renderDrawer(openKey);
   }
 
@@ -776,7 +777,7 @@
   function indicatorPhrase(k, v, lower) {
     var spec = IND[k], name = spec.short;
     if (spec.unit.toLowerCase() === name.toLowerCase()) return withUnit(k, v);
-    if (lower && /^[A-Z][a-z]/.test(name)) name = name.charAt(0).toLowerCase() + name.slice(1);
+    if (lower && /^[A-Z][a-z]+(\s|$)/.test(name)) name = name.charAt(0).toLowerCase() + name.slice(1);
     return name + ' ' + withUnit(k, v) + (spec.levels && spec.levels[v] ? ' (' + spec.levels[v] + ')' : '');
   }
 
@@ -855,7 +856,7 @@
     var plan = buildPlan(latest);
 
     if (sim) {
-      body.appendChild(el('p', { class: 'sim-note', text: 'Simulated: this plan includes what-if offsets and is not based on recorded data alone.' }));
+      body.appendChild(el('p', { class: 'sim-note', text: 'Simulated: includes what-if offsets.' }));
     }
 
     if (plan.reds.length) {
@@ -934,66 +935,38 @@
   /* ------------------------------------------------------------------ *
    * Hazards section
    * ------------------------------------------------------------------ */
-  var HAZARD_ICONS = {
-    radiation: 'M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M12 3a9 9 0 0 1 7.8 4.5L14.6 10.5 M4.2 7.5A9 9 0 0 1 12 3v6 M7.5 19.8A9 9 0 0 0 16.5 19.8L13.5 14.6 M10.5 14.6L7.5 19.8',
-    isolation: 'M12 4a8 8 0 1 0 0.01 0Z M12 9a2.2 2.2 0 1 0 0.01 0Z M8.5 16.5c.8-1.8 2-2.6 3.5-2.6s2.7.8 3.5 2.6',
-    distance: 'M5 18a2 2 0 1 0 0.01 0Z M19 6a2 2 0 1 0 0.01 0Z M6.5 16.5L17.5 7.5 M3 6h4 M17 18h4',
-    gravity: 'M12 3v14 M7 12l5 5 5-5 M5 21h14',
-    environment: 'M4 8h16v10H4Z M8 8V5h8v3 M8 13h.01 M12 13h.01 M16 13h.01'
-  };
+  var hazardFocus = null;
 
-  function renderHazards(latest) {
-    var grid = document.getElementById('hazard-grid');
-    if (!grid) return;
-    grid.innerHTML = '';
+  /** Compact legend: one small tag per NASA HRP hazard. Selecting a tag highlights the systems it may affect. */
+  function renderHazards() {
+    var box = document.getElementById('hz-legend');
+    if (!box) return;
+    box.innerHTML = '';
+    box.appendChild(el('span', { class: 'hz-tags-label', text: 'Possible contributing hazards' }));
     Object.keys(CONTENT.hazards).forEach(function (id) {
       var hz = CONTENT.hazards[id];
-      var icon = svg('svg', { viewBox: '0 0 24 24', class: 'hazard-icon', 'aria-hidden': 'true' }, [svg('path', { d: HAZARD_ICONS[id] || '' })]);
-
-      var inds = el('ul', { class: 'hz-indicators' });
-      (hz.indicators || []).forEach(function (k) {
-        var v = latest ? latest[k] : null;
-        var st = evaluate(k, v);
-        inds.appendChild(el('li', { 'data-status': st, title: CFG.statusText[st] }, [
-          el('span', { class: 'dot' }),
-          el('span', { text: IND[k].short }),
-          el('span', { class: 'hz-val', text: withUnit(k, v) })
-        ]));
+      var mayAffect = joinAnd(hz.indicators.slice(0, 5).map(function (k) { return IND[k].short.toLowerCase().replace(/^spo₂/, 'SpO₂').replace(/^bp/, 'BP'); }));
+      var btn = el('button', { type: 'button', class: 'hz-tag', 'data-hazard': id, 'aria-pressed': String(hazardFocus === id),
+        title: hz.summary + ' May affect ' + mayAffect + '.', text: hz.short });
+      btn.addEventListener('click', function () {
+        hazardFocus = hazardFocus === id ? null : id;
+        renderHazards();
+        applyHazardFocus();
       });
+      box.appendChild(btn);
+    });
+    var src = el('a', { class: 'hz-source', href: CONTENT.hazardsUrl, target: '_blank', rel: 'noopener', text: 'NASA HRP' });
+    box.appendChild(src);
+  }
 
-      var systems = el('div', { class: 'hz-systems' });
-      Object.keys(REGIONS).forEach(function (rk) {
-        var rc = CONTENT.regions[rk];
-        if (!rc || !rc.hazards.some(function (h) { return h.id === id; })) return;
-        var st = regionStatus(rk, latest);
-        var b = el('button', { type: 'button', class: 'hz-system', 'data-status': st }, [
-          el('span', { class: 'dot' }), el('span', { text: REGIONS[rk].name })
-        ]);
-        b.addEventListener('click', function () { openRegion(rk, b); });
-        systems.appendChild(b);
-      });
-
-      grid.appendChild(el('article', { class: 'hazard-card', id: 'hazard-' + id, tabindex: '-1' }, [
-        el('header', null, [icon, el('h3', { text: hz.name })]),
-        el('p', { class: 'hz-summary', text: hz.summary }),
-        el('p', { class: 'hz-effect', text: hz.effect }),
-        el('p', { class: 'hz-label', text: 'May affect these indicators' }),
-        inds,
-        el('p', { class: 'hz-label', text: 'Related body systems' }),
-        systems
-      ]));
+  function applyHazardFocus() {
+    Object.keys(regionNodes).forEach(function (rk) {
+      var c = CONTENT.regions[rk];
+      var related = !hazardFocus || (c && c.hazards && c.hazards.indexOf(hazardFocus) >= 0);
+      regionNodes[rk].group.classList.toggle('dimmed', !related);
     });
   }
 
-  function focusHazard(id) {
-    var card = document.getElementById('hazard-' + id);
-    if (!card) return;
-    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    card.focus({ preventScroll: true });
-    card.classList.remove('flash');
-    void card.offsetWidth;
-    card.classList.add('flash');
-  }
 
   /* ------------------------------------------------------------------ *
    * Region drawer
@@ -1010,6 +983,53 @@
     return el('section', null, [el('h3', { text: title })].concat(children));
   }
 
+  /** "heart rate below 45 bpm or above 110 bpm", "dizziness 3 (Severe)" — the red (attention) limit. */
+  function redLimitText(k) {
+    var spec = IND[k], y = spec.yellow, lim = spec.input;
+    if (!y) return '';
+    if (spec.redText) return spec.redText;
+    var name = /^[A-Z][a-z]+(\s|$)/.test(spec.short) ? spec.short.charAt(0).toLowerCase() + spec.short.slice(1) : spec.short;
+    if (spec.levels) {
+      var lv = Object.keys(spec.levels).map(Number).filter(function (v) { return v > y[1] || v < y[0]; });
+      return name + ' ' + lv.map(function (v) { return v + ' (' + spec.levels[v] + ')'; }).join(' or ');
+    }
+    var low = y[0] > lim.min, high = y[1] < lim.max;
+    if (low && high) return name + ' below ' + fmt(k, y[0]) + ' or above ' + withUnit(k, y[1]);
+    return name + (low ? ' below ' + withUnit(k, y[0]) : ' above ' + withUnit(k, y[1]));
+  }
+
+  function joinOr(items) {
+    if (items.length < 2) return items.join('');
+    return items.slice(0, -1).join(', ') + ' or ' + items[items.length - 1];
+  }
+
+  /** Up to 2 actions: indicator-specific plan actions for flagged indicators first, then the system's own. */
+  function nowActions(key, latest, s, content) {
+    var out = [];
+    if (latest) {
+      Object.keys(PLAN_GROUPS).map(function (gk) {
+        var g = PLAN_GROUPS[gk];
+        var flags = g.indicators.filter(function (k) { return REGIONS[key].indicators.indexOf(k) >= 0; })
+          .map(function (k) { return evaluate(k, latest[k]); })
+          .filter(function (st) { return st === 'yellow' || st === 'red'; });
+        return { g: g, st: worst(flags) };
+      }).filter(function (x) { return x.st === 'yellow' || x.st === 'red'; })
+        .sort(function (a, b) { return RANK[b.st] - RANK[a.st]; })
+        .forEach(function (x) { var t = x.g.actions[x.st]; if (t && out.indexOf(t) < 0) out.push(t); });
+    }
+    var own = (content.now && (content.now[s] || content.now.green)) || [];
+    own.forEach(function (t) { if (out.indexOf(t) < 0) out.push(t); });
+    return out.slice(0, 2);
+  }
+
+  function hazardTags(ids) {
+    return el('div', { class: 'hz-tags' }, [el('span', { class: 'hz-tags-label', text: 'Possible contributing hazards' })].concat(
+      ids.map(function (id) {
+        var hz = CONTENT.hazards[id] || { short: id };
+        return el('span', { class: 'hz-tag', 'data-hazard': id, title: hz.summary || hz.name, text: hz.short });
+      })));
+  }
+
   function renderDrawer(key) {
     var history = getHistory();
     var latest = currentEntry(history);
@@ -1021,145 +1041,102 @@
     var scroll = body.scrollTop;
     body.innerHTML = '';
 
-    // Status line
+    // (1) Status: chip, values, and one-line notes
     body.appendChild(el('section', { class: 'drawer-status' }, [
       el('span', { class: 'status-chip', 'data-status': s, text: CFG.statusText[s] }),
-      el('span', { class: 'meta', text: latest ? 'Latest check-in · ' + fmtDate(latest.date) + (latest.simulated ? ' · simulated' : '') : 'No check-in yet' })
+      el('span', { class: 'meta', text: latest ? fmtDate(latest.date) + (latest.simulated ? ' · simulated' : '') : 'No check-in yet' })
     ]));
-    if (latest && latest.simulated) {
-      body.appendChild(el('p', { class: 'sim-note', text: 'What-if simulation is on. Status and values below include illustrative offsets; the trend chart shows recorded data only.' }));
-    }
-
-    // Red: flight surgeon note
-    if (s === 'red') {
-      body.appendChild(el('div', { class: 'alert', role: 'alert' }, [
-        el('strong', { text: 'Contact your flight surgeon.' }),
-        el('span', { text: ' One or more indicators for this system are outside the monitor range. Share the readings below with the medical team.' })
-      ]));
-    }
-
-    // Indicators used
-    var ul = el('ul', { class: 'readings' });
+    if (latest && latest.simulated) body.appendChild(el('p', { class: 'sim-note', text: 'Simulation on: values include what-if offsets.' }));
+    var ul = el('ul', { class: 'readings compact' });
     region.indicators.forEach(function (k) {
       var v = latest ? latest[k] : null;
       var st = evaluate(k, v);
       var valNode = el('span', { class: 'r-val', text: fmt(k, v) });
       valNode.appendChild(el('small', { text: IND[k].unit }));
       ul.appendChild(el('li', { 'data-status': st }, [
-        el('span', { class: 'r-name', text: IND[k].label }),
+        el('span', { class: 'r-name', text: IND[k].short }),
         valNode,
-        el('span', { class: 'r-ref', text: 'Ref ' + fmtRef(k) + ' · ' + CFG.statusText[st] }),
+        el('span', { class: 'r-ref' }, [document.createTextNode('Ref ' + fmtRef(k)), trendTag(k)]),
         el('span', { class: 'r-delta', text: readingNote(latest, k) })
       ]));
     });
-    var indKids = [ul];
-    if (content.selfCheck) indKids.push(el('p', { class: 'meta selfcheck', text: content.selfCheck }));
-    body.appendChild(section('Indicators used', indKids));
-
-    // Trend watch for this system
-    var tws = regionTrendWatch(key, currentTrends);
-    if (tws.length) {
-      var twl = el('ul', { class: 'research' });
-      tws.forEach(function (k) {
-        var t = currentTrends[k];
-        twl.appendChild(el('li', { text: trendSentence(t) + ' ' + ((CONTENT.trendAdvice && CONTENT.trendAdvice[k]) || 'Consider reviewing your routine') + ', and mention it at your next medical check.' }));
-      });
-      body.appendChild(section('Trend watch', [
-        el('p', { class: 'tw-note', text: 'Early-warning signal, not a diagnosis: these indicators are still within range, but their ' + TW.days + '-day trend may be moving in an unfavorable direction.' }),
-        twl
-      ]));
+    var statusKids = [ul];
+    if (content.performance && latest) {
+      var perfStatus = worst(['perfReaction', 'perfMemory'].map(function (k) { return evaluate(k, latest[k]); }));
+      if (perfStatus === 'yellow' || perfStatus === 'red') { var pn = el('p'); performanceNote(pn, perfStatus, false); statusKids.push(pn); }
+      var lapStatus = evaluate('lapses', latest.lapses);
+      if (lapStatus === 'yellow' || lapStatus === 'red') statusKids.push(el('p', { class: 'alertness-note warn', text: content.alertness }));
     }
-
-    // BMI (metabolism only; height from the one-time profile)
+    regionTrendWatch(key, currentTrends).forEach(function (k) {
+      statusKids.push(el('p', { class: 'tw-note', text: '◇ Trend watch: ' + trendSentence(currentTrends[k]) + ' ' + ((CONTENT.trendAdvice && CONTENT.trendAdvice[k]) || 'Consider reviewing your routine') + '. Early-warning signal, not a diagnosis.' }));
+    });
     if (key === 'metabolism') {
       var mb = massBaseline(history, latest);
       var bmi = mb ? bmiFor(mb.latest.bodyMass) : null;
-      var bmiText = !profile.height ? 'Add your height in the check-in profile to see BMI.'
-        : !mb ? 'No body mass recorded yet.'
-        : 'BMI ' + bmi + ' (height ' + profile.height + ' cm' + (profile.source === 'synthetic' ? ', synthetic demo' : '') + ', body mass ' + mb.latest.bodyMass + ' kg on ' + shortDate(mb.latest.date) + '). ' +
-          'Body mass is ' + fmt('massChange7d', mb.pct) + '% versus your first record (' + mb.first.bodyMass + ' kg on ' + shortDate(mb.first.date) + ').';
-      body.appendChild(section('Body mass & BMI', [
-        el('p', { text: bmiText }),
-        el('p', { class: 'meta', text: 'BMI is shown for reference only and does not affect status.' })
+      statusKids.push(el('p', { class: 'meta', text: bmi
+        ? 'BMI ' + bmi + ' (reference only' + (profile.source === 'synthetic' ? ', synthetic height' : '') + ').'
+        : 'Add your height in the check-in profile to see BMI (reference only).' }));
+    }
+    body.appendChild(el('section', null, statusKids));
+
+    // (2) What to do now
+    var acts = nowActions(key, latest, s, content);
+    var al = el('ol', { class: 'now-list' });
+    acts.forEach(function (t) { al.appendChild(el('li', { text: t })); });
+    body.appendChild(section('What to do now', [al]));
+
+    // (3) When to contact your flight surgeon
+    var contactKids = [];
+    if (s === 'red' && latest) {
+      var reds = region.indicators.filter(function (k) { return evaluate(k, latest[k]) === 'red'; })
+        .map(function (k) { return indicatorPhrase(k, latest[k]); });
+      contactKids.push(el('p', { class: 'alert', role: 'alert' }, [
+        el('strong', { text: 'Now: contact your flight surgeon. ' }),
+        el('span', { text: joinAnd(reds) + (reds.length === 1 ? ' is' : ' are') + ' outside the monitor range.' })
       ]));
     }
-
-    // Alertness: reaction self-test (nervous system)
-    if (content.alertness) {
-      var perfStatus = worst(['perfReaction', 'perfMemory'].map(function (k) { return evaluate(k, latest ? latest[k] : null); }));
-      var lapStatus = evaluate('lapses', latest ? latest.lapses : null);
-      var testBtn = el('button', { type: 'button', class: 'btn btn-primary', text: 'Run 2-minute cognitive check' });
-      testBtn.addEventListener('click', function () { openReactionTest(testBtn); });
-      var notes = [];
-      if (perfStatus === 'yellow' || perfStatus === 'red') {
-        var pn = el('p'); performanceNote(pn, perfStatus, false); notes.push(pn);
-      }
-      if (lapStatus === 'yellow' || lapStatus === 'red') {
-        notes.push(el('p', { class: 'alertness-note warn', text: content.alertness }));
-      }
-      if (!notes.length) notes.push(el('p', { class: 'alertness-note', text: content.alertness }));
-      body.appendChild(section('Cognitive check', notes.concat([
-        el('p', { class: 'meta', text: (content.performance && content.performance.about) + ' Part 1: tap when the circle lights up (median reaction time and lapses over ' + CFG.reactionTest.lapseMs + ' ms). Part 2: type back digit sequences that get longer (accuracy and longest correct sequence). Both are compared with the average of your first ' + CFG.cognitive.baselineTests + ' completed checks.' }),
-        testBtn
-      ])));
+    var triggers = el('ul', { class: 'triggers' });
+    var limits = (content.contactKeys || []).map(redLimitText).filter(Boolean);
+    if (limits.length) {
+      var cap = limits.map(function (t, i) { return i ? t : t.charAt(0).toUpperCase() + t.slice(1); });
+      triggers.appendChild(el('li', { text: cap.slice(0, -1).join('; ') + (cap.length > 1 ? '; or ' : '') + cap[cap.length - 1] + '.' }));
     }
+    if (content.contact) triggers.appendChild(el('li', { text: content.contact }));
+    contactKids.push(triggers);
+    body.appendChild(section('When to contact your flight surgeon', contactKids));
 
-    // What it does
-    if (content.what) body.appendChild(section('What this system does', [el('p', { text: content.what })]));
-
-    // What research shows
-    if (content.research) {
-      var rl = el('ul', { class: 'research' });
-      content.research.forEach(function (t) { rl.appendChild(el('li', { text: t })); });
-      body.appendChild(section('What research shows', [rl]));
-    }
-
-    // Why spaceflight affects it
-    if (content.hazards) {
-      var hl = el('ul', { class: 'hazard-list' });
-      content.hazards.forEach(function (h) {
-        var hz = CONTENT.hazards[h.id] || { name: h.id };
-        hl.appendChild(el('li', null, [
-          el('a', { class: 'hazard-chip', href: '#hazard-' + h.id, 'data-hazard': h.id, text: hz.name }),
-          el('p', { text: h.why })
-        ]));
-      });
-      var src = el('p', { class: 'source' });
-      src.appendChild(document.createTextNode('Based on NASA HRP: '));
-      src.appendChild(el('a', { href: CONTENT.hazardsUrl, target: '_blank', rel: 'noopener', text: '5 Hazards of Human Spaceflight' }));
-      body.appendChild(section('Why spaceflight may affect it', [hl, src]));
-    }
-
-    // 30-day trend
+    // (4) 30-day trend
     var recent = history.slice(-30);
     var chartKeys = region.indicators.concat(region.extraCharts || []);
     var charts = chartKeys.map(function (k) { return trendChart(k, recent); });
     body.appendChild(section('30-day trend', charts.concat([dataTable(chartKeys, recent)])));
 
-    // How to measure it in space
+    // (5) How to measure
+    var measureKids = [];
     if (content.measure) {
       var ol = el('ol', { class: 'steps' });
-      content.measure.forEach(function (t) { ol.appendChild(el('li', { text: t })); });
-      body.appendChild(section('How to measure it in space', [ol]));
+      content.measure.slice(0, 3).forEach(function (t) { ol.appendChild(el('li', { text: t })); });
+      measureKids.push(ol);
+    }
+    if (content.performance) {
+      var testBtn = el('button', { type: 'button', class: 'btn btn-primary', text: 'Run 2-minute cognitive check' });
+      testBtn.addEventListener('click', function () { openReactionTest(testBtn); });
+      measureKids.push(el('p', { class: 'meta', text: content.performance.about }), testBtn);
+    }
+    body.appendChild(section('How to measure', measureKids));
+
+    // Possible contributing hazards (compact tags)
+    if (content.hazards) body.appendChild(hazardTags(content.hazards));
+
+    // (6) Why this may happen (collapsed, at most 2 short sentences)
+    if (content.why) {
+      body.appendChild(el('details', { class: 'why' }, [
+        el('summary', { text: 'Why this may happen' }),
+        el('p', { text: content.why })
+      ]));
     }
 
-    // Recommended actions
-    if (content.actions) {
-      var acts = content.actions[s] || content.actions.green;
-      var al = el('ul', { class: 'actions' });
-      acts.forEach(function (t) {
-        al.appendChild(el('li', null, [
-          el('span', { text: t + ' ' }),
-          el('em', { class: 'disclaimer', text: DISCLAIMER })
-        ]));
-      });
-      var actionKids = [al];
-      if (s === 'red') {
-        actionKids.unshift(el('p', { class: 'alert alert-inline', text: 'Contact your flight surgeon. ' + DISCLAIMER }));
-      }
-      body.appendChild(section('Recommended actions', actionKids));
-    }
-
+    body.appendChild(el('p', { class: 'panel-disclaimer', text: DISCLAIMER }));
     body.scrollTop = scroll;
   }
 
@@ -1332,14 +1309,6 @@
   }
 
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
-  document.getElementById('drawer-body').addEventListener('click', function (ev) {
-    var chip = ev.target.closest && ev.target.closest('a.hazard-chip');
-    if (!chip) return;
-    ev.preventDefault();
-    lastTrigger = null;
-    closeDrawer();
-    setTimeout(function () { focusHazard(chip.getAttribute('data-hazard')); }, 200);
-  });
   backdrop.addEventListener('click', closeDrawer);
   document.addEventListener('keydown', function (ev) {
     if (ev.key !== 'Escape') return;
@@ -1574,8 +1543,8 @@
     } else {
       node.className = 'alertness-note';
       node.textContent = building
-        ? 'Your first ' + CFG.cognitive.baselineTests + ' completed checks set your personal baseline. Results are compared with it, not with population norms.'
-        : 'Within 15% of your own baseline. Compare with your trend over the coming days.';
+        ? 'Your first ' + CFG.cognitive.baselineTests + ' checks set your personal baseline.'
+        : 'Within 15% of your own baseline.';
     }
   }
 
@@ -1703,7 +1672,7 @@
     var advice = document.getElementById('rt-advice');
     if (!enough) {
       advice.className = 'alertness-note';
-      advice.textContent = 'Not enough responses (' + trials.length + ' of ' + RT.minResponses + ' needed) to give a result. Try again when you can focus for a full minute.';
+      advice.textContent = 'Not enough responses (' + trials.length + ' of ' + RT.minResponses + '). Try again when you can focus.';
     } else if (lapStatus === 'yellow' || lapStatus === 'red') {
       advice.className = 'alertness-note warn';
       advice.textContent = (CONTENT.regions.nervous && CONTENT.regions.nervous.alertness) || '';
@@ -1821,7 +1790,7 @@
     var note = document.getElementById('cog-advice');
     if (!memResult) {
       note.className = 'alertness-note';
-      note.textContent = 'Not enough memory sequences (' + memTrials + ' of ' + MEM.minTrials + ' needed). You can still add the reaction result, or run the check again.';
+      note.textContent = 'Not enough sequences (' + memTrials + ' of ' + MEM.minTrials + '). You can still add the reaction result.';
     } else {
       performanceNote(note, worst([rSt, mSt]), (rPerf && rPerf.value == null) || mPerf.value == null);
     }
