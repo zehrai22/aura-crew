@@ -115,5 +115,35 @@ window.AURA_CONFIG = {
     unknown: 'No data'
   },
 
+  // ASSUMPTION - illustrative what-if offsets added to the latest check-in,
+  // to be reviewed against NASA HRP sources. They show how indicators MAY
+  // shift; they are not predictions. Results are clamped to input limits.
+  scenarios: {
+    skipExercise: {
+      label: 'Skip exercise',
+      detail: '3 days without countermeasure exercise',
+      hazard: 'gravity',
+      deltas: { heartRate: 9, systolic: 7, diastolic: 4, glucose: 12, mood: -1 }
+    },
+    sleepDeficit: {
+      label: 'Sleep deficit',
+      detail: 'About 2.5 h less sleep than usual',
+      hazard: 'environment',
+      deltas: { sleep: -2.5, mood: -1, heartRate: 5, glucose: 8, systolic: 4 }
+    },
+    radiationEvent: {
+      label: 'Radiation event',
+      detail: 'Solar particle event, crew sheltering in place',
+      hazard: 'radiation',
+      deltas: { sleep: -1.5, mood: -1, heartRate: 4, temperature: 0.3 }
+    }
+  },
+
+  // ASSUMPTION - simple daily indicator score, to be reviewed against NASA HRP sources.
+  // Average of per-indicator points for the latest check-in (0–100).
+  score: {
+    points: { green: 100, yellow: 60, red: 20 }
+  },
+
   storageKey: 'aura-crew.user-entries.v1'
 };

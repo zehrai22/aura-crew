@@ -16,6 +16,9 @@ An astronaut records a short daily check-in. AURA-CREW compares each reading wit
 
 - **Hazards section** with a card for each of the five NASA HRP hazards. Each card says what the hazard is and which daily indicators it *may affect*, with their latest values and status, and links to the related body systems. The hazard chips in a region panel jump to the matching card.
 
+- **What-if scenarios.** Three toggles (skip exercise, sleep deficit, radiation event) apply illustrative offsets to the latest check-in, so you can see how indicators and body-system status may shift. A "Simulation · not real data" banner appears while any toggle is on. Nothing is saved, and the trend charts always show recorded data.
+- **Indicator score and streak.** A 0–100 daily indicator score (the average of per-indicator points: within range 100, monitor 60, attention 20) with its 7-day average, plus a check-in streak counting consecutive logged days up to today.
+
 ## Project structure
 
 | File | Purpose |
@@ -23,7 +26,7 @@ An astronaut records a short daily check-in. AURA-CREW compares each reading wit
 | `index.html` | Page layout |
 | `style.css` | Holographic HUD styling, responsive layout, animations |
 | `app.js` | Status logic, SVG body figure, check-in form, region panel |
-| `config.js` | **All thresholds** and the indicator-to-system mapping (marked *ASSUMPTION*) |
+| `config.js` | **All thresholds**, the indicator-to-system mapping, what-if offsets and score points (each marked *ASSUMPTION*) |
 | `data.js` | 30 days of **synthetic** demo history (seeded and reproducible), plus the panel text and hazard content |
 
 There is no build step, no backend and no dependencies.

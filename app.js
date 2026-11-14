@@ -282,11 +282,101 @@
     unknown: 'No check-in data yet. Record a daily check-in to see indicator status.'
   };
 
+  /* ------------------------------------------------------------------ *
+   * What-if scenarios, score and streak
+   * ------------------------------------------------------------------ */
+  var SCENARIOS = CFG.scenarios || {};
+  var activeScenarios = {};
+
+  function simulating() { return Object.keys(activeScenarios).some(function (k) { return activeScenarios[k]; }); }
+
+  function applyScenarios(entry) {
+    if (!entry || !simulating()) return entry;
+    var sim = {};
+    Object.keys(entry).forEach(function (k) { sim[k] = entry[k]; });
+    Object.keys(activeScenarios).forEach(function (sk) {
+      if (!activeScenarios[sk]) return;
+      var deltas = SCENARIOS[sk].deltas;
+      Object.keys(deltas).forEach(function (k) { if (sim[k] != null) sim[k] += deltas[k]; });
+    });
+    INDICATOR_KEYS.forEach(function (k) {
+      if (sim[k] == null) return;
+      var lim = IND[k].input, f = Math.pow(10, IND[k].decimals);
+      sim[k] = Math.round(Math.max(lim.min, Math.min(lim.max, sim[k])) * f) / f;
+    });
+    sim.simulated = true;
+    return sim;
+  }
+
+  /** The entry the dashboard shows: the latest check-in, with any what-if offsets applied. */
+  function currentEntry(history) { return applyScenarios(history[history.length - 1] || null); }
+
+  function indicatorScore(entry) {
+    if (!entry) return null;
+    var pts = CFG.score.points, total = 0, n = 0;
+    INDICATOR_KEYS.forEach(function (k) {
+      var st = evaluate(k, entry[k]);
+      if (st === 'unknown') return;
+      total += pts[st]; n++;
+    });
+    return n ? Math.round(total / n) : null;
+  }
+
+  function dayDiff(a, b) {
+    var pa = a.split('-'), pb = b.split('-');
+    return Math.round((Date.UTC(+pb[0], +pb[1] - 1, +pb[2]) - Date.UTC(+pa[0], +pa[1] - 1, +pa[2])) / 86400000);
+  }
+
+  /** Consecutive check-in days ending today (or yesterday, if today is not logged yet). */
+  function streak(history) {
+    if (!history.length) return { days: 0, synthetic: false };
+    var last = history[history.length - 1];
+    if (dayDiff(last.date, todayIso()) > 1) return { days: 0, synthetic: false };
+    var days = 1, synthetic = last.source === 'synthetic';
+    for (var i = history.length - 1; i > 0; i--) {
+      if (dayDiff(history[i - 1].date, history[i].date) !== 1) break;
+      days++;
+      if (history[i - 1].source === 'synthetic') synthetic = true;
+    }
+    return { days: days, synthetic: synthetic };
+  }
+
+  function renderScenarios() {
+    var box = document.getElementById('whatif');
+    box.innerHTML = '';
+    Object.keys(SCENARIOS).forEach(function (sk) {
+      var sc = SCENARIOS[sk];
+      var on = !!activeScenarios[sk];
+      var deltas = Object.keys(sc.deltas).map(function (k) {
+        var d = sc.deltas[k];
+        return IND[k].short + ' ' + (d > 0 ? '+' : '') + d;
+      }).join(' · ');
+      var btn = el('button', { type: 'button', class: 'whatif-toggle', 'aria-pressed': String(on), title: deltas }, [
+        el('span', { class: 'switch', 'aria-hidden': 'true' }),
+        el('span', { class: 'wt-text' }, [
+          el('strong', { text: sc.label }),
+          el('span', { text: sc.detail }),
+          CONTENT.hazards[sc.hazard] ? el('span', { class: 'wt-hazard', text: 'Hazard · ' + CONTENT.hazards[sc.hazard].short }) : null
+        ])
+      ]);
+      btn.addEventListener('click', function () {
+        activeScenarios[sk] = !activeScenarios[sk];
+        renderScenarios();
+        render();
+      });
+      box.appendChild(btn);
+    });
+    document.getElementById('whatif-reset').hidden = !simulating();
+  }
+
   function render() {
     var history = getHistory();
-    var latest = history[history.length - 1] || null;
+    var latest = currentEntry(history);
     var previous = history[history.length - 2] || null;
     var overall = overallStatus(latest);
+    var sim = simulating();
+    document.body.classList.toggle('simulating', sim);
+    document.getElementById('sim-banner').hidden = !sim;
 
     // Synthetic badge
     var hasSynthetic = history.some(function (e) { return e.source === 'synthetic'; });
@@ -309,8 +399,21 @@
     document.getElementById('overall-label').textContent = CFG.statusText[overall];
     document.getElementById('overall-text').textContent = OVERALL_COPY[overall];
     document.getElementById('latest-date').textContent = latest
-      ? 'Latest · ' + fmtDate(latest.date) + (latest.source === 'synthetic' ? ' · synthetic' : ' · your entry')
+      ? 'Latest · ' + fmtDate(latest.date) + (latest.source === 'synthetic' ? ' · synthetic' : ' · your entry') + (sim ? ' · simulated' : '')
       : '—';
+
+    // Score + streak
+    var score = indicatorScore(latest);
+    var recentScores = history.slice(-7).map(indicatorScore).filter(function (v) { return v != null; });
+    var avg = recentScores.length ? Math.round(recentScores.reduce(function (a, b) { return a + b; }, 0) / recentScores.length) : null;
+    document.getElementById('score-value').textContent = score == null ? '—' : score;
+    document.getElementById('gauge-arc').style.strokeDasharray = (score || 0) + ' 100';
+    document.getElementById('score-gauge').setAttribute('aria-label', 'Indicator score ' + (score == null ? 'not available' : score + ' out of 100'));
+    document.getElementById('stat-score').textContent = score == null ? '—' : score + ' / 100';
+    document.getElementById('stat-score-sub').textContent = avg == null ? '' : (sim ? 'Simulated · 7-day avg ' + avg + ' recorded' : '7-day avg ' + avg);
+    var stk = streak(history);
+    document.getElementById('stat-streak').textContent = stk.days + (stk.days === 1 ? ' day' : ' days');
+    document.getElementById('stat-streak-sub').textContent = stk.days === 0 ? 'Check in today to start' : (stk.synthetic ? 'Includes synthetic days' : 'Keep it going');
     var userCount = history.filter(function (e) { return e.source === 'user'; }).length;
     document.getElementById('log-count').textContent = history.length + ' days logged · ' + userCount + ' yours';
 
@@ -436,7 +539,7 @@
 
   function renderDrawer(key) {
     var history = getHistory();
-    var latest = history[history.length - 1] || null;
+    var latest = currentEntry(history);
     var region = REGIONS[key];
     var content = CONTENT.regions[key] || {};
     var s = regionStatus(key, latest);
@@ -448,8 +551,11 @@
     // Status line
     body.appendChild(el('section', { class: 'drawer-status' }, [
       el('span', { class: 'status-chip', 'data-status': s, text: CFG.statusText[s] }),
-      el('span', { class: 'meta', text: latest ? 'Latest check-in · ' + fmtDate(latest.date) : 'No check-in yet' })
+      el('span', { class: 'meta', text: latest ? 'Latest check-in · ' + fmtDate(latest.date) + (latest.simulated ? ' · simulated' : '') : 'No check-in yet' })
     ]));
+    if (latest && latest.simulated) {
+      body.appendChild(el('p', { class: 'sim-note', text: 'What-if simulation is on. Status and values below include illustrative offsets; the trend chart shows recorded data only.' }));
+    }
 
     // Red: flight surgeon note
     if (s === 'red') {
@@ -777,10 +883,17 @@
   /* ------------------------------------------------------------------ *
    * Boot
    * ------------------------------------------------------------------ */
+  document.getElementById('whatif-reset').addEventListener('click', function () {
+    activeScenarios = {};
+    renderScenarios();
+    render();
+  });
+
   renderBodyFigure();
   setupForm();
+  renderScenarios();
   render();
 
   // Exposed for debugging / later stages.
-  window.AURA = { getHistory: getHistory, evaluate: evaluate, regionStatus: regionStatus, overallStatus: overallStatus };
+  window.AURA = { getHistory: getHistory, indicatorScore: indicatorScore, streak: streak, evaluate: evaluate, regionStatus: regionStatus, overallStatus: overallStatus };
 })();
