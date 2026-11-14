@@ -122,6 +122,7 @@
   /** Reference text for the "within range" band, using ≥ / ≤ for open-ended ranges. */
   function fmtRef(key) {
     var spec = IND[key], g = spec.green, lim = spec.input;
+    if (g[0] === g[1]) return fmt(key, g[0]) + (spec.levels && spec.levels[g[0]] ? ' (' + spec.levels[g[0]] + ')' : '');
     if (g[1] >= lim.max) return '≥ ' + fmt(key, g[0]);
     if (g[0] <= lim.min) return '≤ ' + fmt(key, g[1]);
     return fmtRange(key, g);
@@ -140,6 +141,7 @@
       return 'Today ' + (today == null ? '—' : today) + ' min';
     }
     if (entry._asof && entry._asof[k]) return 'Measured ' + shortDate(entry._asof[k]);
+    if (spec.levels && entry[k] != null && spec.levels[entry[k]]) return spec.levels[entry[k]];
     if (spec.optional && (entry[k] == null || isNaN(entry[k]))) return 'Optional · not measured';
     return '';
   }
@@ -235,44 +237,67 @@
   ];
 
   // Visual geometry for each clickable region. `side` places the callout label.
+  // Visual geometry for each clickable region. `side` places the callout label.
+  // Regions are drawn in this order, so later ones sit on top (heart over lungs).
   var REGION_GEOMETRY = {
-    brain: {
-      short: 'Brain · Mind', hotspot: [150, 46], side: 'right', labelY: 40,
+    respiratory: {
+      short: 'Respiratory', hotspot: [131, 168], side: 'left', labelY: 150,
+      zone: function (g) {
+        g.appendChild(svg('path', { class: 'zone',
+          d: 'M146 136 C134 134 122 146 120 166 C118 186 122 202 132 206 C140 208 146 200 146 188 Z M154 136 C166 134 178 146 180 166 C182 186 178 202 168 206 C160 208 154 200 154 188 Z' }));
+        g.appendChild(svg('path', { class: 'zone-line', style: 'stroke-width:1.4',
+          d: 'M150 108 L150 132 M150 132 L142 142 M150 132 L158 142' }));
+      }
+    },
+    nervous: {
+      short: 'Nervous', hotspot: [150, 46], side: 'right', labelY: 40,
       zone: function (g) {
         g.appendChild(svg('ellipse', { class: 'zone', cx: 150, cy: 50, rx: 20, ry: 22 }));
         g.appendChild(svg('path', { class: 'zone-line', style: 'stroke-width:1;opacity:.5',
           d: 'M150 30 L150 70 M136 44 Q143 48 136 54 M164 44 Q157 48 164 54 M138 62 Q144 60 146 66 M162 62 Q156 60 154 66' }));
+        // spinal cord + nerves to the limbs
+        g.appendChild(svg('path', { class: 'zone-line', style: 'stroke-width:1;opacity:.45',
+          d: 'M150 92 L150 300 M150 300 L136 420 M150 300 L164 420 M150 126 L104 150 M150 126 L196 150' }));
       }
     },
     heart: {
-      short: 'Cardio', hotspot: [160, 172], side: 'right', labelY: 140,
+      short: 'Cardio', hotspot: [160, 172], side: 'right', labelY: 130,
       zone: function (g) {
         g.appendChild(svg('path', { class: 'zone',
           d: 'M160 188 C149 180 143 172 145 165 C147 158 156 158 160 165 C164 158 173 158 175 165 C177 172 171 180 160 188 Z' }));
       }
     },
     immune: {
-      short: 'Immune', hotspot: [180, 226], side: 'right', labelY: 262,
+      short: 'Immune', hotspot: [181, 226], side: 'right', labelY: 220,
       zone: function (g) {
-        g.appendChild(svg('ellipse', { class: 'zone', cx: 180, cy: 226, rx: 7, ry: 11 }));
-        [[140, 104], [160, 104], [117, 172], [183, 172], [132, 318], [168, 318]].forEach(function (p) {
+        g.appendChild(svg('ellipse', { class: 'zone', cx: 181, cy: 226, rx: 6, ry: 10 }));
+        [[140, 104], [160, 104], [116, 172], [184, 172], [128, 322], [172, 322]].forEach(function (p) {
           g.appendChild(svg('circle', { class: 'zone', cx: p[0], cy: p[1], r: 2.6 }));
         });
       }
     },
     metabolism: {
-      short: 'Metabolism', hotspot: [134, 229], side: 'left', labelY: 236,
+      short: 'Metabolism', hotspot: [134, 227], side: 'left', labelY: 240,
       zone: function (g) {
         g.appendChild(svg('path', { class: 'zone',
-          d: 'M119 220 C126 211 148 211 154 219 C152 231 139 243 125 242 C118 238 115 228 119 220 Z' }));
-        g.appendChild(svg('path', { class: 'zone', d: 'M150 248 C156 244 166 244 170 248 C166 252 156 252 150 248 Z' }));
+          d: 'M119 218 C126 209 148 209 154 217 C152 229 139 241 125 240 C118 236 115 226 119 218 Z' }));
+        g.appendChild(svg('path', { class: 'zone', d: 'M152 238 C158 234 168 234 172 238 C168 242 158 242 152 238 Z' }));
+      }
+    },
+    renal: {
+      short: 'Urinary', hotspot: [150, 301], side: 'right', labelY: 318,
+      zone: function (g) {
+        g.appendChild(svg('path', { class: 'zone',
+          d: 'M134 256 C128 256 126 264 127 270 C128 278 134 282 139 278 C142 275 140 270 139 266 C138 261 140 256 134 256 Z M166 256 C172 256 174 264 173 270 C172 278 166 282 161 278 C158 275 160 270 161 266 C162 261 160 256 166 256 Z' }));
+        g.appendChild(svg('path', { class: 'zone-line', style: 'stroke-width:1.2', d: 'M138 276 Q142 290 146 296 M162 276 Q158 290 154 296' }));
+        g.appendChild(svg('ellipse', { class: 'zone', cx: 150, cy: 301, rx: 9, ry: 6 }));
       }
     },
     musculoskeletal: {
-      short: 'Bone · Muscle', hotspot: [130, 380], side: 'left', labelY: 396,
+      short: 'Bone · Muscle', hotspot: [130, 380], side: 'left', labelY: 400,
       zone: function (g) {
         g.appendChild(svg('path', { class: 'zone-line',
-          d: 'M128 322 L132 430 M172 322 L168 430 M130 452 L129 546 M170 452 L171 546 M96 142 L91 205 M204 142 L209 205 M88 220 L80 282 M212 220 L220 282' }));
+          d: 'M128 326 L132 430 M172 326 L168 430 M130 452 L129 546 M170 452 L171 546 M96 142 L91 205 M204 142 L209 205 M88 220 L80 282 M212 220 L220 282' }));
       }
     }
   };
@@ -506,7 +531,24 @@
     // Latest readings
     var readings = document.getElementById('readings');
     readings.innerHTML = '';
-    INDICATOR_KEYS.forEach(function (key) {
+    // Group by body system; an indicator shared by several systems appears under the first one.
+    var shown = {};
+    var ordered = [];
+    Object.keys(REGIONS).forEach(function (rk) {
+      var keys = REGIONS[rk].indicators.filter(function (k) { return !shown[k]; });
+      keys.forEach(function (k) { shown[k] = true; });
+      if (keys.length) ordered.push({ region: rk, keys: keys });
+    });
+    INDICATOR_KEYS.forEach(function (k) { if (!shown[k]) { shown[k] = true; ordered.push({ region: null, keys: [k] }); } });
+    var groupOf = {};
+    ordered.forEach(function (g) { g.keys.forEach(function (k, i) { if (i === 0 && g.region) groupOf[k] = g.region; }); });
+    [].concat.apply([], ordered.map(function (g) { return g.keys; })).forEach(function (key) {
+      if (groupOf[key]) {
+        var rs = regionStatus(groupOf[key], latest);
+        readings.appendChild(el('li', { class: 'r-group', 'data-status': rs }, [
+          el('span', { class: 'dot' }), el('span', { text: REGIONS[groupOf[key]].name })
+        ]));
+      }
       var spec = IND[key];
       var v = latest ? latest[key] : null;
       var s = evaluate(key, v);
@@ -651,9 +693,11 @@
         el('span', { class: 'r-delta', text: readingNote(latest, k) })
       ]));
     });
-    body.appendChild(section('Indicators used', [ul]));
+    var indKids = [ul];
+    if (content.selfCheck) indKids.push(el('p', { class: 'meta selfcheck', text: content.selfCheck }));
+    body.appendChild(section('Indicators used', indKids));
 
-    // Alertness: reaction self-test (brain & mind)
+    // Alertness: reaction self-test (nervous system)
     if (content.alertness) {
       var alertStatus = worst(['reactionMedian', 'lapses'].map(function (k) { return evaluate(k, latest ? latest[k] : null); }));
       var testBtn = el('button', { type: 'button', class: 'btn btn-primary', text: 'Run 1-minute reaction test' });
@@ -805,7 +849,7 @@
       cross.setAttribute('x1', x(best.i)); cross.setAttribute('x2', x(best.i)); cross.setAttribute('visibility', 'visible');
       dot.setAttribute('cx', x(best.i)); dot.setAttribute('cy', y(e[key])); dot.setAttribute('data-status', st); dot.setAttribute('visibility', 'visible');
       tip.innerHTML = '';
-      tip.appendChild(el('strong', { text: withUnit(key, e[key]) }));
+      tip.appendChild(el('strong', { text: withUnit(key, e[key]) + (spec.levels && spec.levels[e[key]] ? ' · ' + spec.levels[e[key]] : '') }));
       tip.appendChild(el('span', { text: fmtDate(e.date) + (e.source === 'synthetic' ? ' · synthetic' : ' · your entry') }));
       tip.appendChild(el('span', { class: 'tip-status', 'data-status': st, text: CFG.statusText[st] }));
       tip.hidden = false;
@@ -898,6 +942,9 @@
   var form = document.getElementById('checkin-form');
   var formError = document.getElementById('form-error');
 
+  /** Self-rated scales (mood, dizziness, vision, urine color) are radio groups in the form. */
+  function isScale(k) { return !!form.querySelector('input[type="radio"][name="' + k + '"]'); }
+
   function setupForm() {
     FORM_FIELDS.forEach(function (k) {
       var input = form.elements[k];
@@ -914,8 +961,8 @@
     if (latest) {
       FORM_FIELDS.forEach(function (k) {
         if (IND[k].optional) return;
-        if (k === 'mood') {
-          var r = form.querySelector('input[name="mood"][value="' + latest.mood + '"]');
+        if (isScale(k)) {
+          var r = form.querySelector('input[name="' + k + '"][value="' + latest[k] + '"]');
           if (r) r.checked = true;
         } else if (latest[k] != null) {
           form.elements[k].value = fmt(k, latest[k]);
@@ -993,9 +1040,10 @@
 
     FORM_FIELDS.forEach(function (k) {
       var spec = IND[k], lim = spec.input;
-      var input = k === 'mood' ? null : form.elements[k];
-      var raw = k === 'mood'
-        ? (form.querySelector('input[name="mood"]:checked') || {}).value
+      var scale = isScale(k);
+      var input = scale ? null : form.elements[k];
+      var raw = scale
+        ? (form.querySelector('input[name="' + k + '"]:checked') || {}).value
         : input.value;
       var v = parseFloat(raw);
       var blank = raw === undefined || raw === '' || isNaN(v);
@@ -1177,7 +1225,7 @@
       advice.textContent = 'Not enough responses (' + trials.length + ' of ' + RT.minResponses + ' needed) to give a result. Try again when you can focus for a full minute.';
     } else if (alert === 'yellow' || alert === 'red') {
       advice.className = 'alertness-note warn';
-      advice.textContent = (CONTENT.regions.brain && CONTENT.regions.brain.alertness) || '';
+      advice.textContent = (CONTENT.regions.nervous && CONTENT.regions.nervous.alertness) || '';
     } else {
       advice.className = 'alertness-note';
       advice.textContent = 'Within the reference range. Compare with your own trend over the coming days.';

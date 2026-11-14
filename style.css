@@ -555,3 +555,23 @@ kbd { font-family: var(--mono); font-size: .8em; padding: 1px 6px; border-radius
 @media (prefers-reduced-motion: reduce) { .rt-target.lit { box-shadow: none; } }
 #body-svg > ellipse, #body-svg > g:not(.region) { pointer-events: none; }
 .drawer-body p.meta { font-size: .76rem; color: var(--text-dim); font-family: var(--sans); }
+
+/* ---------- Stage 6b: 7 systems ---------- */
+.mood-scale.scale-4 { grid-template-columns: repeat(4, 1fr); }
+.mood-scale.scale-3 { grid-template-columns: repeat(3, 1fr); }
+.mood-scale span small { display: block; font-family: var(--sans); font-size: .64rem; color: var(--text-dim); letter-spacing: 0; margin-top: 1px; }
+.mood-scale input:checked + span small { color: var(--cyan); }
+.scale-label { display: block; font-size: .76rem; color: var(--text-dim); letter-spacing: .04em; margin-bottom: 6px; }
+.swatches span { position: relative; padding-top: 18px; }
+.swatches span::before {
+  content: ""; position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  width: 60%; height: 8px; border-radius: 4px; background: var(--sw); opacity: .9;
+}
+.readings li.r-group {
+  display: flex; align-items: center; gap: 8px; padding: 10px 2px 2px; border-left: 0; background: none;
+  font-family: var(--mono); font-size: .66rem; letter-spacing: .16em; text-transform: uppercase; color: var(--text-dim);
+}
+.readings li.r-group:first-child { padding-top: 0; }
+.readings li.r-group .dot { width: 7px; height: 7px; }
+.selfcheck { margin-top: 8px !important; }
+.mood-scale input { z-index: 1; }

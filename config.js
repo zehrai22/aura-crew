@@ -13,6 +13,7 @@
  *   carryForwardDays: for periodic measurements, the latest value is used for
  *                     status for up to this many days
  *   signed          : show a "+" sign for positive values
+ *   levels          : names for each value of a self-rated scale
  *
  * These values are decision-support placeholders, not clinical criteria.
  */
@@ -81,6 +82,84 @@ window.AURA_CONFIG = {
       green: [4, 5],
       yellow: [3, 5],
       input: { min: 1, max: 5, step: 1 }
+    },
+
+    // --- Respiratory ---
+    // ASSUMPTION - general adult reference ranges, to be reviewed against NASA HRP sources
+    spo2: {
+      label: 'Blood oxygen saturation (SpO₂)',
+      short: 'SpO₂',
+      unit: '%',
+      decimals: 0,
+      green: [95, 100],
+      yellow: [92, 100],
+      input: { min: 50, max: 100, step: 1 }
+    },
+    respRate: {
+      label: 'Respiratory rate (at rest)',
+      short: 'Respiratory rate',
+      unit: '/min',
+      decimals: 0,
+      green: [12, 20],
+      yellow: [10, 24],
+      input: { min: 4, max: 60, step: 1 }
+    },
+    cabinCO2: {
+      // ~3300 ppm ≈ 2.5 mmHg, ~5300 ppm ≈ 4 mmHg CO₂ partial pressure at sea-level cabin pressure
+      label: 'Cabin CO₂',
+      short: 'Cabin CO₂',
+      unit: 'ppm',
+      decimals: 0,
+      green: [0, 3300],
+      yellow: [0, 5300],
+      optional: true,
+      input: { min: 200, max: 20000, step: 10 }
+    },
+
+    // --- Urinary / renal ---
+    // ASSUMPTION - general adult reference ranges, to be reviewed against NASA HRP sources
+    fluidIntake: {
+      label: 'Fluid intake today',
+      short: 'Fluid intake',
+      unit: 'L',
+      decimals: 1,
+      green: [2, 5],
+      yellow: [1.5, 6],
+      input: { min: 0, max: 10, step: 0.1 }
+    },
+    urineColor: {
+      label: 'Urine color (1 = pale, 5 = dark)',
+      short: 'Urine color',
+      unit: '/5',
+      decimals: 0,
+      green: [1, 2],
+      yellow: [1, 3],
+      levels: { 1: 'Pale', 2: 'Light yellow', 3: 'Yellow', 4: 'Dark yellow', 5: 'Amber' },
+      input: { min: 1, max: 5, step: 1 }
+    },
+
+    // --- Nervous system self-checks (not diagnoses) ---
+    // ASSUMPTION - general adult reference ranges, to be reviewed against NASA HRP sources
+    // Severe dizziness (3) or a noticeable vision change (2) is outside `yellow`, so it shows red.
+    dizziness: {
+      label: 'Dizziness / balance problems',
+      short: 'Dizziness',
+      unit: '/3',
+      decimals: 0,
+      green: [0, 0],
+      yellow: [0, 2],
+      levels: { 0: 'None', 1: 'Mild', 2: 'Moderate', 3: 'Severe' },
+      input: { min: 0, max: 3, step: 1 }
+    },
+    visionChange: {
+      label: 'Vision change',
+      short: 'Vision change',
+      unit: '/2',
+      decimals: 0,
+      green: [0, 0],
+      yellow: [0, 1],
+      levels: { 0: 'None', 1: 'Slight', 2: 'Noticeable' },
+      input: { min: 0, max: 2, step: 1 }
     },
 
     // --- Alertness: 1-minute reaction self-test (inspired by the ISS PVT) ---
@@ -177,12 +256,18 @@ window.AURA_CONFIG = {
 
   // Order of indicators on the dashboard, in the score and on the check-in form.
   dashboardIndicators: [
-    'systolic', 'diastolic', 'heartRate', 'glucose', 'temperature', 'sleep', 'mood',
-    'reactionMedian', 'lapses', 'resistive7d', 'aerobic7d', 'urinaryCalcium', 'boneResorption'
+    'mood', 'sleep', 'reactionMedian', 'lapses', 'dizziness', 'visionChange',
+    'systolic', 'diastolic', 'heartRate',
+    'spo2', 'respRate', 'cabinCO2',
+    'fluidIntake', 'urineColor', 'urinaryCalcium',
+    'resistive7d', 'aerobic7d', 'boneResorption',
+    'temperature', 'glucose'
   ],
   formFields: [
-    'systolic', 'diastolic', 'heartRate', 'glucose', 'temperature', 'sleep', 'mood',
-    'resistiveMin', 'aerobicMin', 'urinaryCalcium', 'boneResorption', 'reactionMedian', 'lapses'
+    'systolic', 'diastolic', 'heartRate', 'spo2', 'respRate', 'cabinCO2',
+    'glucose', 'temperature', 'sleep', 'mood', 'dizziness', 'visionChange',
+    'fluidIntake', 'urineColor', 'resistiveMin', 'aerobicMin',
+    'urinaryCalcium', 'boneResorption', 'reactionMedian', 'lapses'
   ],
 
   // ASSUMPTION - reaction self-test settings, to be reviewed against NASA HRP sources.
@@ -201,13 +286,22 @@ window.AURA_CONFIG = {
   // to be reviewed against NASA HRP sources. A region's status is the worst
   // status among the indicators it depends on.
   regions: {
-    brain: {
-      name: 'Brain & mind',
-      indicators: ['mood', 'sleep', 'reactionMedian', 'lapses']
+    nervous: {
+      name: 'Nervous system',
+      indicators: ['mood', 'sleep', 'reactionMedian', 'lapses', 'dizziness', 'visionChange']
     },
     heart: {
-      name: 'Heart & cardiovascular',
+      name: 'Cardiovascular',
       indicators: ['systolic', 'diastolic', 'heartRate']
+    },
+    respiratory: {
+      name: 'Respiratory',
+      indicators: ['spo2', 'respRate', 'cabinCO2']
+    },
+    renal: {
+      name: 'Urinary & renal',
+      // urinaryCalcium is shared with bones & muscle
+      indicators: ['fluidIntake', 'urineColor', 'urinaryCalcium']
     },
     immune: {
       name: 'Immune system',
@@ -240,7 +334,7 @@ window.AURA_CONFIG = {
       label: 'Skip exercise',
       detail: '3 days without countermeasure exercise',
       hazard: 'gravity',
-      deltas: { resistive7d: -165, aerobic7d: -105, heartRate: 5, systolic: 4, glucose: 8, mood: -1 }
+      deltas: { resistive7d: -165, aerobic7d: -105, urinaryCalcium: 10, heartRate: 5, systolic: 4, glucose: 8, mood: -1 }
     },
     sleepDeficit: {
       label: 'Sleep deficit',
@@ -252,7 +346,13 @@ window.AURA_CONFIG = {
       label: 'Radiation event',
       detail: 'Solar particle event, crew sheltering in place',
       hazard: 'radiation',
-      deltas: { sleep: -1.5, mood: -1, reactionMedian: 20, lapses: 1, heartRate: 4, temperature: 0.3 }
+      deltas: { sleep: -1.5, mood: -1, reactionMedian: 20, lapses: 1, heartRate: 4, temperature: 0.3, cabinCO2: 1200 }
+    },
+    evaDay: {
+      label: 'Spacewalk day',
+      detail: 'Long EVA in the suit, little to drink',
+      hazard: 'environment',
+      deltas: { heartRate: 10, respRate: 4, spo2: -2, fluidIntake: -0.8, urineColor: 1, dizziness: 1, sleep: -1 }
     }
   },
 

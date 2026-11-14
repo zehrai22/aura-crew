@@ -89,6 +89,30 @@
   // Pinned latest day.
   last.resistiveMin = 45; last.aerobicMin = 30; last.reactionMedian = 312; last.lapses = 2;
 
+  // ---- Stage 6b indicators (SYNTHETIC) ------------------------------------
+  // Another separate seeded generator, so all earlier synthetic values stay unchanged.
+  var rand3 = mulberry32(2028);
+  function noise3() { return rand3() + rand3() + rand3() - 1.5; }
+  history.forEach(function (e, idx) {
+    var t = idx / (DAYS - 1);
+    var late = Math.max(0, (t - 0.7) / 0.3);
+    e.spo2 = Math.min(100, Math.round(97.6 + noise3() * 0.8));
+    e.respRate = Math.round(14 + noise3() * 1.5);
+    e.cabinCO2 = Math.round((2500 + 500 * late + noise3() * 250) / 10) * 10;   // ppm, logged from the cabin display
+    e.fluidIntake = Math.round((2.5 - 0.35 * late + noise3() * 0.25) * 10) / 10;
+    e.urineColor = e.fluidIntake < 2.2 ? 3 : 2;
+    e.dizziness = 0;
+    e.visionChange = 0;
+  });
+  history[1].dizziness = 1;                          // a mild episode early in the window
+  history[22].visionChange = 1;                      // one "slight" vision-change report
+  mid.cabinCO2 = 3800;                               // CO₂ spike on the short-sleep night
+  history[6].cabinCO2 = undefined;                   // CO₂ is optional: a few days not logged
+  history[19].cabinCO2 = undefined;
+  // Pinned latest day.
+  last.spo2 = 97; last.respRate = 15; last.cabinCO2 = 2900;
+  last.fluidIntake = 2.1; last.urineColor = 3; last.dizziness = 0; last.visionChange = 0;
+
   window.AURA_SYNTHETIC_HISTORY = history;
 })();
 
@@ -109,7 +133,7 @@ window.AURA_CONTENT = {
       name: 'Space radiation', short: 'Radiation',
       summary: 'Beyond the protection of Earth\'s atmosphere and magnetic field, crews receive higher doses of radiation, including from solar particle events.',
       effect: 'Over long missions, radiation may affect the central nervous system, immune cells and blood vessels. Most effects build slowly and are not visible day to day.',
-      indicators: ['mood', 'sleep', 'reactionMedian', 'temperature', 'systolic', 'diastolic', 'boneResorption']
+      indicators: ['mood', 'sleep', 'reactionMedian', 'visionChange', 'temperature', 'systolic', 'diastolic', 'boneResorption']
     },
     isolation: {
       name: 'Isolation and confinement', short: 'Isolation',
@@ -120,64 +144,139 @@ window.AURA_CONTENT = {
     distance: {
       name: 'Distance from Earth', short: 'Distance',
       summary: 'The farther from Earth, the longer the communication delay and the less real-time support, medical care and resupply.',
-      effect: 'Greater autonomy may add stress that affects mood and sleep. Limited care options make early self-monitoring of every indicator more important.',
-      indicators: ['mood', 'sleep', 'lapses']
+      effect: 'Greater autonomy may add stress that affects mood and sleep. Limited care options make early self-monitoring more important, including for conditions such as kidney stones that would be hard to treat far from Earth.',
+      indicators: ['mood', 'sleep', 'lapses', 'fluidIntake', 'urinaryCalcium']
     },
     gravity: {
       name: 'Gravity fields', short: 'Gravity',
       summary: 'Crews move between gravity fields: weightlessness in flight, partial gravity on the Moon or Mars, and full gravity on return to Earth.',
-      effect: 'Fluid shifts and reduced loading may affect blood pressure, heart rate and glucose handling. Unloading may raise urinary calcium and bone resorption markers and may lead to bone and muscle loss, which exercise reduces but does not fully prevent.',
-      indicators: ['systolic', 'diastolic', 'heartRate', 'glucose', 'resistive7d', 'aerobic7d', 'urinaryCalcium', 'boneResorption']
+      effect: 'Gravity transitions may affect balance and coordination, and the headward fluid shift may be linked to changes in the eye. Unloading may raise urinary calcium (with a higher kidney stone risk) and bone resorption markers, and may lead to bone and muscle loss, which exercise reduces but does not fully prevent.',
+      indicators: ['dizziness', 'visionChange', 'systolic', 'diastolic', 'heartRate', 'glucose', 'urinaryCalcium', 'urineColor', 'resistive7d', 'aerobic7d', 'boneResorption']
     },
     environment: {
       name: 'Hostile and closed environments', short: 'Closed environment',
-      summary: 'The spacecraft is a closed system. Air quality, CO₂, noise, lighting, temperature and microbes all need careful control.',
-      effect: 'Noise, light and CO₂ may affect sleep, mood and alertness. Limited space may make exercise harder, and shared air and surfaces may affect exposure to microbes, which can show in body temperature.',
-      indicators: ['sleep', 'mood', 'reactionMedian', 'lapses', 'temperature', 'resistive7d']
+      summary: 'The spacecraft and spacesuit are closed systems. Oxygen, CO₂, water, noise, lighting, temperature and microbes all need careful control.',
+      effect: 'Elevated CO₂ or low oxygen may affect breathing, SpO₂ and alertness, especially during spacewalks. Noise and light may affect sleep and mood, limited water and space may affect hydration and exercise, and shared air may affect exposure to microbes.',
+      indicators: ['spo2', 'respRate', 'cabinCO2', 'sleep', 'mood', 'reactionMedian', 'lapses', 'temperature', 'fluidIntake', 'resistive7d']
     }
   },
 
   regions: {
-    brain: {
-      what: 'The brain coordinates attention, memory, emotion and the sleep–wake cycle. Daily mood, sleep and a short reaction test are simple indicators of how well the mind is coping with mission demands.',
+    nervous: {
+      what: 'The nervous system (brain, spinal cord, nerves and the balance organs of the inner ear) coordinates attention, mood, sleep, balance and vision. Daily mood, sleep, a short reaction test and two self-checks for dizziness and vision are simple indicators of how it is coping.',
+      selfCheck: 'Dizziness and vision items are self-checks only, not diagnoses. Severe dizziness (3) or a noticeable vision change (2) turns this system red.',
       hazards: [
+        { id: 'gravity', why: 'Moving between gravity fields may affect the vestibular (balance) system, causing dizziness, motion sickness or coordination problems. The headward fluid shift may be linked to changes in the eye and brain.' },
         { id: 'isolation', why: 'Long periods with a small crew, away from family and friends, may affect mood, motivation and team dynamics.' },
-        { id: 'environment', why: 'Noise, artificial light, shifted schedules and elevated CO₂ may affect sleep quality.' },
+        { id: 'environment', why: 'Noise, artificial light, shifted schedules and elevated CO₂ may affect sleep quality and alertness.' },
         { id: 'distance', why: 'Communication delays and limited real-time support from Earth may add stress.' },
         { id: 'radiation', why: 'Radiation exposure over long missions may affect the central nervous system; this is an active research area.' }
       ],
       measure: [
         'Sleep: log hours from your sleep-tracking wearable or sleep diary right after waking. Note wake-ups and naps.',
         'Mood: rate yourself 1–5 at the same time every day, before high-workload tasks. Be honest; the trend matters more than any single score.',
-        'In microgravity, sleep in a secured sleeping bag with eye mask and earplugs so readings reflect your normal routine.',
-        'Alertness: run the 1-minute reaction self-test at the same time each day, in a quiet spot, before caffeine if possible. Brace yourself with a foot restraint and hold the device steady.'
+        'Alertness: run the 1-minute reaction self-test at the same time each day, in a quiet spot, before caffeine if possible. Brace yourself with a foot restraint and hold the device steady.',
+        'Dizziness / balance: rate 0–3 for the past 24 hours, including motion sickness, spinning or trouble coordinating movements.',
+        'Vision: cover one eye at a time and read the same text card at the same distance each day. Rate 0 (no change), 1 (slight) or 2 (noticeable blur or change).'
       ],
       alertness: 'Low alertness can signal fatigue; consider rest and contact your flight surgeon.',
       research: [
-        'The reaction self-test is inspired by the psychomotor vigilance test (PVT). NASA\'s Reaction Self Test on the ISS used a brief 3-minute PVT to help astronauts track their alertness.',
-        'Studies of ISS crews have reported slower psychomotor speed on days with 6 hours of sleep or less.',
+        'NASA lists altered sensorimotor and vestibular function, such as dizziness, motion sickness and coordination problems, among the risks of spaceflight.',
+        'NASA also lists spaceflight-associated neuro-ocular syndrome (SANS): changes in eye and brain structure seen in some crew members on long missions.',
+        'The reaction self-test is inspired by the psychomotor vigilance test (PVT). NASA\'s Reaction Self Test on the ISS used a brief 3-minute PVT to help astronauts track their alertness, and studies of ISS crews have reported slower psychomotor speed on days with 6 hours of sleep or less.',
         'The in-app test lasts 1 minute and is not a validated clinical test. Use it to watch your own trend over days, not as a single score.'
       ],
       actions: {
         green: [
           'Keep a consistent sleep window aligned with the mission timeline.',
-          'Protect some personal time and private contact with family or friends this week.'
+          'Keep doing the daily vision and balance self-checks so changes are noticed early.'
         ],
         yellow: [
           'Protect a 7–9 hour sleep window tonight: dim lights early, limit screens, use eye mask and earplugs.',
-          'Talk with a crewmate you trust or request a private conference with crew support.',
-          'Re-check mood, sleep and the reaction test for the next 2–3 days to see whether the trend continues.'
+          'If you notice dizziness, move your head slowly and avoid tasks that need fine coordination until it settles.',
+          'Re-check mood, sleep, the reaction test and the self-checks over the next 2–3 days, and tell your medical officer about any vision change.'
         ],
         red: [
-          'Where mission rules allow, defer non-essential high-workload or high-risk tasks until you have been reviewed.',
-          'Reach out to crew behavioral health support today.',
-          'Tell your commander or a crewmate how you are doing so they can support you.'
+          'Where mission rules allow, stop tasks that need balance, fine coordination or clear vision until you have been reviewed.',
+          'Report the symptom, when it started and what you were doing to your medical officer.',
+          'Tell your commander or a crewmate so they can support you.'
+        ]
+      }
+    },
+
+    respiratory: {
+      what: 'The lungs and airways bring oxygen into the blood and remove carbon dioxide. Blood oxygen saturation (SpO₂) and resting breathing rate are simple daily indicators, and cabin CO₂ describes the air you are breathing.',
+      research: [
+        'NASA lists hypoxia among the risks of spaceflight, including exposure to low oxygen and high CO₂ during spacewalks.',
+        'Cabin CO₂ on spacecraft is usually higher than on Earth. Elevated CO₂ may be linked to headaches and reduced alertness in some crew members.'
+      ],
+      hazards: [
+        { id: 'environment', why: 'The cabin and spacesuit are closed environments: oxygen and CO₂ depend on life-support systems, and CO₂ may build up where air does not circulate well.' },
+        { id: 'distance', why: 'Far from Earth, a quick return may not be possible, so life-support problems may need to be handled on board.' },
+        { id: 'gravity', why: 'Without convection in microgravity, exhaled CO₂ may pool around your face in still air, for example while sleeping.' },
+        { id: 'radiation', why: 'Radiation may affect lung tissue over long missions; this is still being studied.' }
+      ],
+      measure: [
+        'SpO₂: sit still for 2 minutes, warm your hands, place the pulse oximeter on a fingertip without nail polish and wait for a stable reading.',
+        'Respiratory rate: count breaths for 60 seconds while at rest, or read it from your wearable. Avoid measuring right after exercise or talking.',
+        'Cabin CO₂ (optional): note the reading from the cabin environment display for your module at the time of your check-in.',
+        'In your sleep station, make sure the fan or ventilation is on so exhaled CO₂ does not collect around your head.'
+      ],
+      actions: {
+        green: [
+          'Keep your sleep station and work area ventilated.',
+          'Keep following the cabin air quality procedures for your vehicle.'
+        ],
+        yellow: [
+          'Re-check SpO₂ and breathing rate after 10 minutes of rest.',
+          'Check ventilation in your area and move to a better-ventilated module if CO₂ is elevated.',
+          'Note any headache, shortness of breath or unusual fatigue for your medical officer.'
+        ],
+        red: [
+          'Stop strenuous activity and rest in a well-ventilated area, then repeat the measurement.',
+          'Follow your vehicle\'s air quality and oxygen procedures and inform the crew.',
+          'Share the readings and any symptoms with your medical officer right away.'
+        ]
+      }
+    },
+
+    renal: {
+      what: 'The kidneys filter the blood, balance fluids and minerals, and remove waste as urine. Daily fluid intake and urine color are simple hydration indicators, and urinary calcium (shared with bones & muscle) relates to kidney stone risk.',
+      research: [
+        'NASA research reports increased urinary calcium during spaceflight, as calcium released from unloaded bone is excreted by the kidneys.',
+        'NASA lists kidney stone formation as a risk on long missions, where a stone would be hard to treat far from Earth.',
+        'Adequate fluid intake is a common countermeasure: more urine dilutes the minerals that can form stones.'
+      ],
+      hazards: [
+        { id: 'gravity', why: 'Bone unloading may raise urinary calcium, and fluid shifts may change thirst and urine output, which may raise kidney stone risk.' },
+        { id: 'distance', why: 'Far from Earth, a kidney stone would be difficult to treat, so prevention and early indicators matter more.' },
+        { id: 'environment', why: 'Recycled water supplies, a packaged diet and a busy schedule may make it harder to drink enough.' }
+      ],
+      measure: [
+        'Fluid intake: add up the liters from drink bags and food rehydration for the day. Most crews log this from their drink bag count.',
+        'Urine color: compare with the color card in your hygiene kit (1 = pale, 5 = amber), using the first sample after waking.',
+        'Urinary calcium (optional): enter the % change versus preflight only when your medical team shares a new result from a scheduled urine sample. It is the same value used by bones & muscle.'
+      ],
+      actions: {
+        green: [
+          'Keep drinking regularly through the day, not only at meals.',
+          'Keep following the mission diet plan for sodium and protein.'
+        ],
+        yellow: [
+          'Aim to drink an extra 0.5–1 L today, spread through the day.',
+          'Check urine color again tomorrow morning.',
+          'If urinary calcium is rising, ask your medical team about fluid and diet targets.'
+        ],
+        red: [
+          'Increase fluid intake now, as your medical plan allows.',
+          'Report any flank or back pain, blood in urine or pain when urinating to your medical officer right away.',
+          'Share your fluid log and readings with the medical team.'
         ]
       }
     },
 
     heart: {
-      what: 'The heart and blood vessels move oxygen and nutrients around the body and keep blood pressure stable when you change position or exert yourself.',
+      what: 'The cardiovascular system, the heart and blood vessels, moves oxygen and nutrients around the body and keep blood pressure stable when you change position or exert yourself.',
       hazards: [
         { id: 'gravity', why: 'Without gravity, body fluids shift toward the head and the heart works less; this may lead to cardiovascular deconditioning and dizziness when returning to gravity.' },
         { id: 'radiation', why: 'Radiation may affect blood vessel health over long missions; this is still being studied.' },

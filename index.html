@@ -116,6 +116,44 @@
             <label><input type="radio" name="mood" value="5"><span>5</span></label>
           </div>
         </fieldset>
+        <fieldset class="field-wide mood">
+          <legend>Dizziness / balance problems <em>self-check · past 24 h</em></legend>
+          <div class="mood-scale scale-4">
+            <label><input type="radio" name="dizziness" value="0"><span>0 <small>None</small></span></label>
+            <label><input type="radio" name="dizziness" value="1"><span>1 <small>Mild</small></span></label>
+            <label><input type="radio" name="dizziness" value="2"><span>2 <small>Moderate</small></span></label>
+            <label><input type="radio" name="dizziness" value="3"><span>3 <small>Severe</small></span></label>
+          </div>
+        </fieldset>
+        <fieldset class="field-wide mood">
+          <legend>Vision change <em>self-check · same text card daily</em></legend>
+          <div class="mood-scale scale-3">
+            <label><input type="radio" name="visionChange" value="0"><span>0 <small>None</small></span></label>
+            <label><input type="radio" name="visionChange" value="1"><span>1 <small>Slight</small></span></label>
+            <label><input type="radio" name="visionChange" value="2"><span>2 <small>Noticeable</small></span></label>
+          </div>
+          <p class="field-note">Self-checks only, not a diagnosis. Severe dizziness or a noticeable vision change shows red: contact your flight surgeon.</p>
+        </fieldset>
+        <fieldset class="field-group">
+          <legend>Breathing</legend>
+          <label class="field"><span>SpO₂ <em>%</em></span><input type="number" name="spo2" inputmode="numeric" required></label>
+          <label class="field"><span>Resp. rate <em>/min</em></span><input type="number" name="respRate" inputmode="numeric" required></label>
+          <label class="field field-wide"><span>Cabin CO₂ <em>ppm · optional, from the cabin display</em></span><input type="number" name="cabinCO2" inputmode="numeric" placeholder="not logged"></label>
+        </fieldset>
+        <fieldset class="field-group">
+          <legend>Hydration</legend>
+          <label class="field field-wide"><span>Fluid intake today <em>liters</em></span><input type="number" name="fluidIntake" inputmode="decimal" required></label>
+          <div class="field-wide">
+            <span class="scale-label">Urine color <em>1 = pale · 5 = amber</em></span>
+            <div class="mood-scale swatches" role="radiogroup" aria-label="Urine color, 1 pale to 5 amber">
+              <label><input type="radio" name="urineColor" value="1"><span style="--sw:#f3f0c4">1</span></label>
+              <label><input type="radio" name="urineColor" value="2"><span style="--sw:#f2e27a">2</span></label>
+              <label><input type="radio" name="urineColor" value="3"><span style="--sw:#e9c93a">3</span></label>
+              <label><input type="radio" name="urineColor" value="4"><span style="--sw:#d9a520">4</span></label>
+              <label><input type="radio" name="urineColor" value="5"><span style="--sw:#b9781a">5</span></label>
+            </div>
+          </div>
+        </fieldset>
         <fieldset class="field-group">
           <legend>Exercise today <em>minutes</em></legend>
           <label class="field"><span>Resistive</span><input type="number" name="resistiveMin" inputmode="numeric" required></label>
@@ -123,10 +161,10 @@
           <p class="field-note" id="exercise-7d" aria-live="polite">—</p>
         </fieldset>
         <fieldset class="field-group">
-          <legend>Bone markers <em>optional · % vs preflight</em></legend>
+          <legend>Bone & kidney markers <em>optional · % vs preflight</em></legend>
           <label class="field"><span>Urinary calcium</span><input type="number" name="urinaryCalcium" inputmode="numeric" placeholder="not measured"></label>
           <label class="field"><span>Bone resorption</span><input type="number" name="boneResorption" inputmode="numeric" placeholder="not measured"></label>
-          <p class="field-note">From periodic urine or blood samples, not measured daily. Leave blank unless your medical team shared a new result.</p>
+          <p class="field-note">From periodic urine or blood samples, not measured daily. Leave blank unless your medical team shared a new result. Urinary calcium is used by both bones & muscle and urinary & renal.</p>
         </fieldset>
         <fieldset class="field-wide alertness-field">
           <legend>Alertness <em>optional · 1-minute reaction test</em></legend>
