@@ -28,6 +28,16 @@
 
   <main class="layout">
     <!-- Body figure -->
+    <!-- Vital signs strip -->
+    <section class="panel vitals-panel" id="vitals" aria-labelledby="vitals-title">
+      <div class="panel-head">
+        <h2 id="vitals-title">Vital signs</h2>
+        <span class="vitals-meta"><span class="status-chip" id="vitals-chip">—</span><span class="meta" id="vitals-date">—</span></span>
+      </div>
+      <div class="vitals-row" id="vitals-row"></div>
+      <p class="vitals-alert" id="vitals-alert" role="alert" hidden></p>
+    </section>
+
     <!-- Today's action plan: the main decision-support card -->
     <section class="panel plan-panel" id="plan" aria-labelledby="plan-title">
       <div class="panel-head">

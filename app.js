@@ -715,7 +715,10 @@
     var readings = document.getElementById('readings');
     readings.innerHTML = '';
     // Group by body system; an indicator shared by several systems appears under the first one.
+    // Vital signs have their own strip at the top, so they are not repeated here.
     var shown = {};
+    CFG.vitals.forEach(function (t) { t.keys.forEach(function (k) { shown[k] = true; }); });
+    readings.appendChild(el('li', { class: 'r-note', text: 'Vital signs are shown at the top of the dashboard.' }));
     var ordered = [];
     Object.keys(REGIONS).forEach(function (rk) {
       var keys = REGIONS[rk].indicators.filter(function (k) { return !shown[k]; });
@@ -751,6 +754,7 @@
       ]));
     });
 
+    renderVitals(history, latest);
     renderPlan(latest);
     renderHazards();
     applyHazardFocus();
@@ -765,6 +769,80 @@
     return el('span', { class: 'r-trend' + (t.watch ? ' watch' : ''),
       title: TW.days + '-day trend: ' + words + (t.watch ? '. Trend watch: early-warning signal, not a diagnosis.' : '') },
       [document.createTextNode(' · ' + TW.days + ' d ' + ARROWS[t.dir] + (t.watch ? ' Trend watch' : ''))]);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Vital signs strip
+   * ------------------------------------------------------------------ */
+  var VITAL_WORDS = { green: 'stable', yellow: 'monitor', red: 'attention', unknown: 'no data' };
+
+  /** Small 7-day sparkline of recorded values (two lines for blood pressure). */
+  function sparkline(keys, history) {
+    var W = 100, H = 30, P = 3;
+    if (!history.length) return null;
+    var lastDate = history[history.length - 1].date, days = CFG.vitalsSparkDays;
+    var series = keys.map(function (k) {
+      return history.filter(function (e) { return dayDiff(e.date, lastDate) < days && measuredOn(e, k); })
+        .map(function (e) { return { x: days - 1 - dayDiff(e.date, lastDate), y: e[k] }; });
+    });
+    var all = [].concat.apply([], series.map(function (sr) { return sr.map(function (p) { return p.y; }); }));
+    if (all.length < 2) return null;
+    var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
+    if (keys.length === 1) { var g = IND[keys[0]].green; lo = Math.min(lo, g[0]); hi = Math.max(hi, g[1]); }
+    if (hi === lo) { hi += 1; lo -= 1; }
+    var x = function (v) { return P + v * (W - 2 * P) / (days - 1); };
+    var y = function (v) { return H - P - (v - lo) * (H - 2 * P) / (hi - lo); };
+    var root = svg('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'spark', preserveAspectRatio: 'none', 'aria-hidden': 'true' });
+    if (keys.length === 1) {
+      var gr = IND[keys[0]].green;
+      root.appendChild(svg('rect', { class: 'spark-band', x: 0, width: W, y: y(gr[1]), height: Math.max(0, y(gr[0]) - y(gr[1])) }));
+    }
+    series.forEach(function (sr, i) {
+      if (!sr.length) return;
+      root.appendChild(svg('path', { class: 'spark-line' + (i ? ' secondary' : ''), 'vector-effect': 'non-scaling-stroke',
+        d: sr.map(function (p, n) { return (n ? 'L' : 'M') + x(p.x).toFixed(1) + ' ' + y(p.y).toFixed(1); }).join(' ') }));
+      var lastP = sr[sr.length - 1];
+      root.appendChild(svg('circle', { class: 'spark-dot', 'data-status': evaluate(keys[i], lastP.y), cx: x(lastP.x), cy: y(lastP.y), r: 2.2, 'vector-effect': 'non-scaling-stroke' }));
+    });
+    return root;
+  }
+
+  function renderVitals(history, latest) {
+    var row = document.getElementById('vitals-row');
+    row.innerHTML = '';
+    var sim = !!(latest && latest.simulated);
+    var statuses = [], reds = [];
+    CFG.vitals.forEach(function (t) {
+      var vals = t.keys.map(function (k) { return latest ? latest[k] : null; });
+      var st = worst(t.keys.map(function (k, i) { return evaluate(k, vals[i]); }));
+      statuses.push(st);
+      t.keys.forEach(function (k, i) { if (evaluate(k, vals[i]) === 'red') reds.push(indicatorPhrase(k, vals[i])); });
+      var unit = IND[t.keys[0]].unit;
+      var valueText = vals.every(function (v) { return v == null; }) ? '—' : t.keys.map(function (k, i) { return fmt(k, vals[i]); }).join('/');
+      var spark = sparkline(t.keys, history);
+      var tile = el('button', { type: 'button', class: 'vital', 'data-status': st,
+        'aria-label': t.label + ': ' + valueText + ' ' + unit + ', ' + CFG.statusText[st] + (sim ? ', simulated' : '') + '. Opens the ' + REGIONS[t.region].name + ' panel.' }, [
+        el('span', { class: 'vital-label', text: t.label }),
+        el('span', { class: 'vital-value' }, [document.createTextNode(valueText), el('small', { text: unit })]),
+        el('span', { class: 'vital-status' }, [el('span', { class: 'dot' }), document.createTextNode(CFG.statusText[st] + (sim ? ' · simulated' : ''))]),
+        spark || el('span', { class: 'spark-empty', text: 'Not enough data for 7 days' }),
+        el('span', { class: 'vital-sub', text: 'Ref ' + t.keys.map(fmtRef).join(' / ') })
+      ]);
+      tile.addEventListener('click', function () { openRegion(t.region, tile); });
+      row.appendChild(tile);
+    });
+    var overall = worst(statuses);
+    var chip = document.getElementById('vitals-chip');
+    chip.setAttribute('data-status', overall);
+    chip.textContent = 'Vital signs: ' + VITAL_WORDS[overall] + (sim ? ' · simulated' : '');
+    document.getElementById('vitals-date').textContent = latest ? fmtDate(latest.date) + ' · ' + CFG.vitalsSparkDays + '-day trend' : '';
+    var alertBox = document.getElementById('vitals-alert');
+    alertBox.hidden = overall !== 'red';
+    alertBox.innerHTML = '';
+    if (overall === 'red') {
+      alertBox.appendChild(el('strong', { text: 'Contact your flight surgeon. ' }));
+      alertBox.appendChild(document.createTextNode(joinAnd(reds) + (reds.length === 1 ? ' is' : ' are') + ' outside the monitor range' + (sim ? ' (simulated).' : '.')));
+    }
   }
 
   /* ------------------------------------------------------------------ *

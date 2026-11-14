@@ -10,6 +10,13 @@ An astronaut records a short daily check-in. AURA-CREW tells them what to do now
 
 ## Features
 
+- **Vital signs strip** at the top of the dashboard: five large tiles for body temperature, heart rate, blood pressure, respiratory rate and oxygen saturation (SpO₂).
+  - Each tile shows the latest value with its unit, a green/yellow/red status colour with a text label (never colour alone), a 7-day sparkline and its reference range.
+  - Blood pressure shows systolic/diastolic on one tile and takes the worse status of the two.
+  - One overall chip reads "Vital signs: stable" (all green), "monitor" (any yellow) or "attention" (any red). On attention, a "Contact your flight surgeon" note names the values outside the monitor range.
+  - Tapping a tile opens the related body-system panel (temperature → immune, heart rate and blood pressure → cardiovascular, respiratory rate and SpO₂ → respiratory).
+  - It uses the same check-in data and `config.js` thresholds (no new inputs), updates live with new check-ins and what-if toggles, and says "simulated" while a scenario is on.
+  - These five values are not repeated in the "Latest indicators" list. On phones the tiles scroll horizontally.
 - **Today's action plan** (the main decision-support card, at the top of the dashboard). It collects actions from all seven body systems and ranks them: red before yellow, then by the most severe system. It shows the top 3 as a numbered list.
   - Actions are grouped by related indicators (for example rest = sleep + mood, hydration = fluid intake + urine color), so a shared indicator such as sleep produces one action, not two.
   - Each action has a one-line reason that names the indicators behind it, such as "Sleep 4.5 h and mood 2/5 may reduce alertness", plus a status dot and the body system it belongs to. Tapping an action opens that system's panel.
@@ -66,7 +73,7 @@ An astronaut records a short daily check-in. AURA-CREW tells them what to do now
 | `index.html` | Page layout |
 | `style.css` | Holographic HUD styling, responsive layout, animations |
 | `app.js` | Status logic, today's action plan, trend watch, profile/BMI, derived indicators (7-day totals, marker carry-forward, personal baselines), SVG body figure, check-in form, region panel, cognitive check (reaction + working memory) |
-| `config.js` | **All thresholds**, the indicator-to-system mapping, cognitive check timing and baseline settings, what-if offsets and score points (each marked *ASSUMPTION*) |
+| `config.js` | **All thresholds**, the indicator-to-system mapping, the vital-signs tiles, cognitive check timing and baseline settings, what-if offsets and score points (each marked *ASSUMPTION*) |
 | `data.js` | 30 days of **synthetic** demo history (seeded and reproducible), plus the panel text and hazard content |
 
 There is no build step, no backend and no dependencies.

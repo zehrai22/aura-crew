@@ -373,6 +373,18 @@ window.AURA_CONFIG = {
   },
   profileKey: 'aura-crew.profile.v1',
 
+  // "Vital signs" strip at the top of the dashboard. Uses the same indicators and
+  // thresholds as above (no new inputs). A tile with several keys (blood pressure)
+  // takes the worst status of its keys. `region` is the panel a tile opens.
+  vitals: [
+    { keys: ['temperature'], label: 'Body temperature', region: 'immune' },
+    { keys: ['heartRate'], label: 'Heart rate', region: 'heart' },
+    { keys: ['systolic', 'diastolic'], label: 'Blood pressure', region: 'heart' },
+    { keys: ['respRate'], label: 'Respiratory rate', region: 'respiratory' },
+    { keys: ['spo2'], label: 'Oxygen (SpO₂)', region: 'respiratory' }
+  ],
+  vitalsSparkDays: 7,
+
   // Order of indicators on the dashboard, in the score and on the check-in form.
   dashboardIndicators: [
     'mood', 'sleep', 'perfReaction', 'perfMemory', 'lapses', 'dizziness', 'visionChange',
