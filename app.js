@@ -129,7 +129,7 @@
   }
   function withUnit(key, v) {
     var u = IND[key].unit;
-    return fmt(key, v) + (u === '%' ? '%' : ' ' + u);
+    return fmt(key, v) + (u === '%' || u.charAt(0) === '/' ? u : ' ' + u);
   }
   /** Small context note for a reading: today's minutes, when a marker was measured, or "not measured". */
   function readingNote(entry, k) {
@@ -568,8 +568,146 @@
       ]));
     });
 
+    renderPlan(latest);
     renderHazards(latest);
     if (openKey) renderDrawer(openKey);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Today's action plan (main decision-support card)
+   * ------------------------------------------------------------------ */
+  var PLAN_SIZE = 3;
+  var PLAN_GROUPS = (window.AURA_CONTENT && window.AURA_CONTENT.plan && window.AURA_CONTENT.plan.groups) || {};
+
+  /** "Sleep 4.5 h", "SpO₂ 91%", "Dizziness 3 (Severe)", "2 lapses" */
+  function indicatorPhrase(k, v, lower) {
+    var spec = IND[k], name = spec.short;
+    if (spec.unit.toLowerCase() === name.toLowerCase()) return withUnit(k, v);
+    if (lower && /^[A-Z][a-z]/.test(name)) name = name.charAt(0).toLowerCase() + name.slice(1);
+    return name + ' ' + withUnit(k, v) + (spec.levels && spec.levels[v] ? ' (' + spec.levels[v] + ')' : '');
+  }
+
+  function joinAnd(items) {
+    if (items.length < 2) return items.join('');
+    return items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1];
+  }
+
+  function nextCheckInText(latest) {
+    var today = todayIso();
+    if (!latest || dayDiff(latest.date, today) > 0) return 'Next suggested check-in: today, at your usual time.';
+    var p = today.split('-');
+    var d = new Date(+p[0], +p[1] - 1, +p[2] + 1);
+    return 'Next suggested check-in: tomorrow morning (' + d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ').';
+  }
+
+  /**
+   * Builds the ranked plan from the entry shown on the dashboard.
+   * Each action group (e.g. "rest" = sleep + mood) appears once, under the most
+   * severe body system that uses one of its flagged indicators.
+   */
+  function buildPlan(entry) {
+    var order = Object.keys(REGIONS);
+    var systems = order.map(function (rk) { return { key: rk, st: regionStatus(rk, entry) }; })
+      .filter(function (x) { return x.st === 'red' || x.st === 'yellow'; })
+      .sort(function (a, b) { return (RANK[b.st] - RANK[a.st]) || (order.indexOf(a.key) - order.indexOf(b.key)); });
+
+    var items = [];
+    Object.keys(PLAN_GROUPS).forEach(function (gk) {
+      var g = PLAN_GROUPS[gk];
+      var flags = g.indicators
+        .map(function (k) { return { k: k, st: evaluate(k, entry[k]) }; })
+        .filter(function (f) { return f.st === 'yellow' || f.st === 'red'; })
+        .sort(function (a, b) { return RANK[b.st] - RANK[a.st]; });
+      if (!flags.length) return;
+      var sys = null;
+      systems.some(function (x) {
+        if (flags.some(function (f) { return REGIONS[x.key].indicators.indexOf(f.k) >= 0; })) { sys = x; return true; }
+        return false;
+      });
+      if (!sys) return;
+      var st = flags[0].st;
+      items.push({
+        group: gk, st: st, sys: sys, flags: flags,
+        text: g.actions[st] || g.actions.yellow,
+        reason: joinAnd(flags.map(function (f, i) { return indicatorPhrase(f.k, entry[f.k], i > 0); })) + ' ' + g.reason + '.'
+      });
+    });
+    items.sort(function (a, b) {
+      return (RANK[b.st] - RANK[a.st]) || (systems.indexOf(a.sys) - systems.indexOf(b.sys)) ||
+        (b.flags.length - a.flags.length);
+    });
+
+    // Red indicators, each once, with the systems they belong to.
+    var reds = [];
+    INDICATOR_KEYS.forEach(function (k) {
+      if (evaluate(k, entry[k]) !== 'red') return;
+      var names = order.filter(function (rk) { return REGIONS[rk].indicators.indexOf(k) >= 0; })
+        .map(function (rk) { return REGIONS[rk].name.toLowerCase(); });
+      reds.push(indicatorPhrase(k, entry[k]) + (names.length ? ' (' + names.join(', ') + ')' : ''));
+    });
+    return { items: items.slice(0, PLAN_SIZE), total: items.length, reds: reds, systems: systems };
+  }
+
+  function renderPlan(latest) {
+    var body = document.getElementById('plan-body');
+    var sim = !!(latest && latest.simulated);
+    document.getElementById('plan-sim').hidden = !sim;
+    document.getElementById('plan-meta').textContent = latest ? 'From ' + fmtDate(latest.date) + ' check-in' : '';
+    body.innerHTML = '';
+
+    if (!latest) {
+      body.appendChild(el('p', { class: 'meta', text: 'Record a daily check-in to get today\'s action plan.' }));
+      return;
+    }
+    var plan = buildPlan(latest);
+
+    if (sim) {
+      body.appendChild(el('p', { class: 'sim-note', text: 'Simulated: this plan includes what-if offsets and is not based on recorded data alone.' }));
+    }
+
+    if (plan.reds.length) {
+      var shown = plan.reds.slice(0, 3);
+      var more = plan.reds.length - shown.length;
+      body.appendChild(el('div', { class: 'plan-banner', role: 'alert' }, [
+        el('span', { class: 'dot' }),
+        el('div', null, [
+          el('strong', { text: 'Contact your flight surgeon' }),
+          el('span', { text: 'Outside the monitor range: ' + joinAnd(shown) + (more > 0 ? ' and ' + more + ' more' : '') + '.' })
+        ])
+      ]));
+    }
+
+    if (!plan.items.length) {
+      body.appendChild(el('div', { class: 'plan-ok' }, [
+        el('span', { class: 'dot' }),
+        el('div', null, [
+          el('strong', { text: 'No action needed today. Keep your routine.' }),
+          el('span', { text: nextCheckInText(latest) })
+        ])
+      ]));
+      return;
+    }
+
+    var ol = el('ol', { class: 'plan-list' });
+    plan.items.forEach(function (it) {
+      var sysName = REGIONS[it.sys.key].name;
+      var btn = el('button', { type: 'button', class: 'plan-item', 'data-status': it.st,
+        'aria-label': it.text + ' ' + sysName + ', ' + CFG.statusText[it.st] + '. ' + it.reason + ' Opens the ' + sysName + ' panel.' }, [
+        el('span', { class: 'plan-action', text: it.text }),
+        el('span', { class: 'plan-why' }, [
+          el('span', { class: 'dot', title: CFG.statusText[it.st] }),
+          el('span', { class: 'plan-sys', text: sysName }),
+          el('span', { text: it.reason })
+        ])
+      ]);
+      btn.addEventListener('click', function () { openRegion(it.sys.key, btn); });
+      ol.appendChild(el('li', null, [btn]));
+    });
+    body.appendChild(ol);
+    if (plan.total > plan.items.length) {
+      body.appendChild(el('p', { class: 'meta plan-more', text: (plan.total - plan.items.length) + ' more ' +
+        (plan.total - plan.items.length === 1 ? 'item' : 'items') + ' in the body-system panels.' }));
+    }
   }
 
   /* ------------------------------------------------------------------ *

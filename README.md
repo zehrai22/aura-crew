@@ -10,6 +10,13 @@ An astronaut records a short daily check-in. AURA-CREW compares each reading wit
 
 ## Features
 
+- **Today's action plan** (the main decision-support card, at the top of the dashboard). It collects actions from all seven body systems and ranks them: red before yellow, then by the most severe system. It shows the top 3 as a numbered list.
+  - Actions are grouped by related indicators (for example rest = sleep + mood, hydration = fluid intake + urine color), so a shared indicator such as sleep produces one action, not two.
+  - Each action has a one-line reason that names the indicators behind it, such as "Sleep 4.5 h and mood 2/5 may reduce alertness", plus a status dot and the body system it belongs to. Tapping an action opens that system's panel.
+  - If any system is red, a red "Contact your flight surgeon" banner lists the indicators outside the monitor range and their systems.
+  - If everything is within range, the card says "No action needed today. Keep your routine." and suggests the next check-in.
+  - The card updates live with new check-ins and with the what-if toggles, and is marked "Simulated" while a scenario is on.
+  - Actions use "consider" and "may" wording, and the card ends with "Decision support only, confirm with your medical officer." The action texts and reasons are in `data.js` (`AURA_CONTENT.plan`).
 - **Daily check-in** with blood pressure (systolic and diastolic), resting heart rate, SpO₂, respiratory rate, blood glucose (mg/dL), body temperature, sleep hours, mood (1–5), dizziness/balance (0–3) and vision change (0–2) self-checks, fluid intake (L), urine color (1–5) and minutes of resistive and aerobic exercise. Optional fields cover cabin CO₂ (ppm), two bone and kidney markers, and the reaction self-test result. A new entry updates the whole app right away. Entries are kept in your browser's `localStorage`, and an entry for a date replaces the synthetic entry for that date.
 - **Interactive 2D body figure** with seven clickable, labeled systems: nervous system, cardiovascular, respiratory, urinary and renal, bones and muscle, immune system, and metabolism. Each one turns green (within range), yellow (monitor) or red (attention) based on the latest indicators it depends on. The overall status is shown alongside.
 - **Region panel** for each system. It covers what the system does and why spaceflight may affect it, linked to the five NASA HRP hazards. It also has a 30-day trend chart per indicator (with reference bands, a hover tooltip and a data table), how to measure the indicators in space, and 2–3 recommended actions that depend on the current status. A red status adds a "Contact your flight surgeon" note. Every recommendation ends with "Decision support only, confirm with your medical officer."
@@ -30,7 +37,7 @@ An astronaut records a short daily check-in. AURA-CREW compares each reading wit
 |---|---|
 | `index.html` | Page layout |
 | `style.css` | Holographic HUD styling, responsive layout, animations |
-| `app.js` | Status logic, derived indicators (7-day totals, marker carry-forward), SVG body figure, check-in form, region panel, reaction self-test |
+| `app.js` | Status logic, today's action plan, derived indicators (7-day totals, marker carry-forward), SVG body figure, check-in form, region panel, reaction self-test |
 | `config.js` | **All thresholds**, the indicator-to-system mapping, reaction-test timing, what-if offsets and score points (each marked *ASSUMPTION*) |
 | `data.js` | 30 days of **synthetic** demo history (seeded and reproducible), plus the panel text and hazard content |
 

@@ -161,6 +161,55 @@ window.AURA_CONTENT = {
     }
   },
 
+  // Today's action plan: actions grouped by related indicators. The plan takes the
+  // most severe groups across all body systems. Wording: "consider" / "may".
+  plan: {
+    groups: {
+      rest: { indicators: ['sleep', 'mood'], reason: 'may reduce alertness',
+        actions: { yellow: 'Consider protecting a 7–9 hour sleep window tonight and checking in with a crewmate or crew support.',
+                   red: 'Consider resting tonight with a full sleep window and reaching out to crew support; defer high-risk tasks where mission rules allow.' } },
+      alertness: { indicators: ['reactionMedian', 'lapses'], reason: 'may signal fatigue',
+        actions: { yellow: 'Consider a short rest before critical tasks and re-running the reaction test later today.',
+                   red: 'Consider resting before any critical task and re-testing alertness; low alertness can signal fatigue.' } },
+      balance: { indicators: ['dizziness'], reason: 'may affect coordination and safety',
+        actions: { yellow: 'Consider moving your head slowly and avoiding tasks that need fine coordination until it settles.',
+                   red: 'Consider stopping tasks that need balance or fine coordination until you have been reviewed.' } },
+      vision: { indicators: ['visionChange'], reason: 'may affect tasks that need clear vision',
+        actions: { yellow: 'Consider repeating the vision card check tomorrow and telling your medical officer about the change.',
+                   red: 'Consider pausing tasks that need clear vision until you have been reviewed.' } },
+      bloodPressure: { indicators: ['systolic', 'diastolic'], reason: 'may add strain on the cardiovascular system',
+        actions: { yellow: 'Consider repeating the blood pressure reading after 5 minutes of rest and reviewing caffeine and workload.',
+                   red: 'Consider repeating the reading now and resting until your medical officer has reviewed it.' } },
+      heartRate: { indicators: ['heartRate'], reason: 'may add strain on the cardiovascular system',
+        actions: { yellow: 'Consider re-checking resting heart rate after 5 minutes of quiet rest.',
+                   red: 'Consider resting and re-checking heart rate now, and avoiding strenuous activity until reviewed.' } },
+      oxygen: { indicators: ['spo2', 'respRate'], reason: 'may reduce oxygen delivery',
+        actions: { yellow: 'Consider re-checking SpO₂ and breathing rate after 10 minutes of rest in a well-ventilated area.',
+                   red: 'Consider stopping exertion, moving to a well-ventilated area and re-checking SpO₂ now.' } },
+      co2: { indicators: ['cabinCO2'], reason: 'may cause headaches and reduce alertness',
+        actions: { yellow: 'Consider checking the ventilation in your area and working in a better-ventilated module.',
+                   red: 'Consider following your vehicle\'s air quality procedures and informing the crew.' } },
+      hydration: { indicators: ['fluidIntake', 'urineColor'], reason: 'may raise kidney stone risk',
+        actions: { yellow: 'Consider drinking an extra 0.5–1 L today, spread through the day.',
+                   red: 'Consider increasing fluid intake now, as your medical plan allows.' } },
+      calcium: { indicators: ['urinaryCalcium'], reason: 'may raise kidney stone risk and reflect bone loss',
+        actions: { yellow: 'Consider asking your medical team about fluid and diet targets while urinary calcium is elevated.',
+                   red: 'Consider sharing your latest urinary calcium result and fluid log with your medical officer.' } },
+      boneMarker: { indicators: ['boneResorption'], reason: 'may reflect faster bone loss',
+        actions: { yellow: 'Consider asking your medical team when the next bone marker sample is planned.',
+                   red: 'Consider reviewing your exercise and diet plan with your medical officer.' } },
+      exercise: { indicators: ['resistive7d', 'aerobic7d'], reason: 'may speed up bone and muscle loss',
+        actions: { yellow: 'Consider planning make-up exercise sessions this week, starting with resistive training.',
+                   red: 'Consider reviewing your exercise schedule with your fitness or medical team today.' } },
+      temperature: { indicators: ['temperature'], reason: 'may signal an immune response',
+        actions: { yellow: 'Consider re-checking temperature in 4–6 hours with the same method, and resting.',
+                   red: 'Consider resting, following the crew health protocol for close contact, and re-checking temperature.' } },
+      glucose: { indicators: ['glucose'], reason: 'may affect energy and blood sugar control',
+        actions: { yellow: 'Consider re-measuring fasting glucose tomorrow before eating and logging meals.',
+                   red: 'Consider re-checking glucose now with a fresh strip and noting any symptoms.' } }
+    }
+  },
+
   regions: {
     nervous: {
       what: 'The nervous system (brain, spinal cord, nerves and the balance organs of the inner ear) coordinates attention, mood, sleep, balance and vision. Daily mood, sleep, a short reaction test and two self-checks for dizziness and vision are simple indicators of how it is coping.',

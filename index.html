@@ -29,6 +29,16 @@
 
   <main class="layout">
     <!-- Body figure -->
+    <!-- Today's action plan: the main decision-support card -->
+    <section class="panel plan-panel" id="plan" aria-labelledby="plan-title">
+      <div class="panel-head">
+        <h2 id="plan-title">Today's action plan</h2>
+        <span class="plan-tags"><span class="sim-tag" id="plan-sim" hidden>Simulated</span><span class="meta" id="plan-meta">—</span></span>
+      </div>
+      <div id="plan-body" aria-live="polite"></div>
+      <p class="plan-disclaimer">Decision support only, confirm with your medical officer.</p>
+    </section>
+
     <section class="panel figure-panel" aria-labelledby="figure-title">
       <div class="panel-head">
         <h2 id="figure-title">Body systems</h2>
