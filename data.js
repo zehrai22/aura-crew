@@ -61,7 +61,7 @@
   hot.temperature = 37.6;                          // one mildly elevated temperature reading
 
   // Pin the latest synthetic day so the demo opens in a known state:
-  // cardiovascular + brain/mind "monitor", everything else "within range".
+  // see the "Pinned latest day" lines below for the other indicators.
   var last = history[history.length - 1];
   last.systolic = 134; last.diastolic = 86; last.heartRate = 74;
   last.glucose = 92; last.temperature = 36.8; last.sleep = 7.2; last.mood = 3;
