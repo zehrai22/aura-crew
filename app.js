@@ -11,7 +11,8 @@
   var REGIONS = CFG.regions;
   var RANK = { unknown: -1, green: 0, yellow: 1, red: 2 };
   var SVG_NS = 'http://www.w3.org/2000/svg';
-  var INDICATOR_KEYS = ['systolic', 'diastolic', 'heartRate', 'glucose', 'temperature', 'sleep', 'mood'];
+  var INDICATOR_KEYS = CFG.dashboardIndicators;
+  var FORM_FIELDS = CFG.formFields;
 
   /* ------------------------------------------------------------------ *
    * Storage
@@ -34,7 +35,53 @@
     SYNTHETIC.forEach(function (e) { byDate[e.date] = e; });
     userEntries.slice().sort(function (a, b) { return a.ts - b.ts; })
       .forEach(function (e) { byDate[e.date] = e; });
-    return Object.keys(byDate).sort().map(function (d) { return byDate[d]; });
+    return enrich(Object.keys(byDate).sort().map(function (d) { return byDate[d]; }));
+  }
+
+  /**
+   * Returns copies of the entries with derived indicators filled in:
+   *  - `derived` indicators (7-day exercise totals) are summed over the window
+   *  - `carryForwardDays` indicators (periodic bone markers) reuse the latest
+   *    measured value for status; `_asof[key]` records when it was measured.
+   * Stored entries are never modified.
+   */
+  function enrich(raw) {
+    var lastSeen = {};
+    var out = raw.map(function (r) {
+      var e = {};
+      Object.keys(r).forEach(function (k) { e[k] = r[k]; });
+      e._asof = {};
+      return e;
+    });
+    out.forEach(function (e, i) {
+      Object.keys(IND).forEach(function (k) {
+        var spec = IND[k];
+        if (spec.derived) {
+          // Only report a total once the history covers the whole window,
+          // otherwise early partial sums would look like missed exercise.
+          if (dayDiff(out[0].date, e.date) < spec.derived.days - 1) { e[k] = null; return; }
+          var sum = 0, count = 0;
+          for (var j = i; j >= 0 && dayDiff(out[j].date, e.date) < spec.derived.days; j--) {
+            var v = raw[j][spec.derived.from];
+            if (typeof v === 'number' && !isNaN(v)) { sum += v; count++; }
+          }
+          e[k] = count ? sum : null;
+        } else if (spec.carryForwardDays) {
+          if (typeof e[k] === 'number' && !isNaN(e[k])) {
+            lastSeen[k] = { value: e[k], date: e.date };
+          } else if (lastSeen[k] && dayDiff(lastSeen[k].date, e.date) <= spec.carryForwardDays) {
+            e[k] = lastSeen[k].value;
+            e._asof[k] = lastSeen[k].date;
+          }
+        }
+      });
+    });
+    return out;
+  }
+
+  /** True when the value shown for `k` was actually recorded on this entry's date. */
+  function measuredOn(e, k) {
+    return e && e[k] != null && !isNaN(e[k]) && !(e._asof && e._asof[k]);
   }
 
   /* ------------------------------------------------------------------ *
@@ -68,9 +115,34 @@
    * ------------------------------------------------------------------ */
   function fmt(key, v) {
     if (v === null || v === undefined || isNaN(v)) return '—';
-    return Number(v).toFixed(IND[key].decimals);
+    var str = Number(v).toFixed(IND[key].decimals);
+    return IND[key].signed && v > 0 ? '+' + str : str;
   }
   function fmtRange(key, r) { return fmt(key, r[0]) + '–' + fmt(key, r[1]); }
+  /** Reference text for the "within range" band, using ≥ / ≤ for open-ended ranges. */
+  function fmtRef(key) {
+    var spec = IND[key], g = spec.green, lim = spec.input;
+    if (g[1] >= lim.max) return '≥ ' + fmt(key, g[0]);
+    if (g[0] <= lim.min) return '≤ ' + fmt(key, g[1]);
+    return fmtRange(key, g);
+  }
+  function withUnit(key, v) {
+    var u = IND[key].unit;
+    return fmt(key, v) + (u === '%' ? '%' : ' ' + u);
+  }
+  /** Small context note for a reading: today's minutes, when a marker was measured, or "not measured". */
+  function readingNote(entry, k) {
+    var spec = IND[k];
+    if (!entry) return '';
+    if (spec.derived) {
+      var today = entry[spec.derived.from];
+      if (entry[k] == null) return 'Needs ' + spec.derived.days + ' days of logs';
+      return 'Today ' + (today == null ? '—' : today) + ' min';
+    }
+    if (entry._asof && entry._asof[k]) return 'Measured ' + shortDate(entry._asof[k]);
+    if (spec.optional && (entry[k] == null || isNaN(entry[k]))) return 'Optional · not measured';
+    return '';
+  }
   function fmtDate(iso) {
     var p = iso.split('-');
     var d = new Date(+p[0], +p[1] - 1, +p[2]);
@@ -438,8 +510,8 @@
       var spec = IND[key];
       var v = latest ? latest[key] : null;
       var s = evaluate(key, v);
-      var deltaText = '';
-      if (previous && v != null && previous[key] != null) {
+      var deltaText = readingNote(latest, key);
+      if (!deltaText && previous && v != null && previous[key] != null) {
         var diff = v - previous[key];
         var arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '■';
         deltaText = arrow + ' ' + (diff > 0 ? '+' : '') + diff.toFixed(spec.decimals) + ' vs prev';
@@ -449,7 +521,7 @@
       readings.appendChild(el('li', { 'data-status': s, title: CFG.statusText[s] }, [
         el('span', { class: 'r-name', text: spec.label }),
         valNode,
-        el('span', { class: 'r-ref', text: 'Ref ' + fmtRange(key, spec.green) }),
+        el('span', { class: 'r-ref', text: 'Ref ' + fmtRef(key) }),
         el('span', { class: 'r-delta', text: deltaText })
       ]));
     });
@@ -484,7 +556,7 @@
         inds.appendChild(el('li', { 'data-status': st, title: CFG.statusText[st] }, [
           el('span', { class: 'dot' }),
           el('span', { text: IND[k].short }),
-          el('span', { class: 'hz-val', text: fmt(k, v) + ' ' + IND[k].unit })
+          el('span', { class: 'hz-val', text: withUnit(k, v) })
         ]));
       });
 
@@ -575,14 +647,33 @@
       ul.appendChild(el('li', { 'data-status': st }, [
         el('span', { class: 'r-name', text: IND[k].label }),
         valNode,
-        el('span', { class: 'r-ref', text: 'Ref ' + fmtRange(k, IND[k].green) + ' · ' + CFG.statusText[st] }),
-        el('span', { class: 'r-delta' })
+        el('span', { class: 'r-ref', text: 'Ref ' + fmtRef(k) + ' · ' + CFG.statusText[st] }),
+        el('span', { class: 'r-delta', text: readingNote(latest, k) })
       ]));
     });
     body.appendChild(section('Indicators used', [ul]));
 
+    // Alertness: reaction self-test (brain & mind)
+    if (content.alertness) {
+      var alertStatus = worst(['reactionMedian', 'lapses'].map(function (k) { return evaluate(k, latest ? latest[k] : null); }));
+      var testBtn = el('button', { type: 'button', class: 'btn btn-primary', text: 'Run 1-minute reaction test' });
+      testBtn.addEventListener('click', function () { openReactionTest(testBtn); });
+      body.appendChild(section('Alertness', [
+        el('p', { class: 'alertness-note' + (alertStatus === 'yellow' || alertStatus === 'red' ? ' warn' : ''), text: content.alertness }),
+        el('p', { class: 'meta', text: 'Tap when the circle lights up. Records median reaction time and lapses (responses over ' + CFG.reactionTest.lapseMs + ' ms) into the check-in form.' }),
+        testBtn
+      ]));
+    }
+
     // What it does
     if (content.what) body.appendChild(section('What this system does', [el('p', { text: content.what })]));
+
+    // What research shows
+    if (content.research) {
+      var rl = el('ul', { class: 'research' });
+      content.research.forEach(function (t) { rl.appendChild(el('li', { text: t })); });
+      body.appendChild(section('What research shows', [rl]));
+    }
 
     // Why spaceflight affects it
     if (content.hazards) {
@@ -638,28 +729,34 @@
   function trendChart(key, entries) {
     var spec = IND[key];
     var W = 460, H = 132, L = 40, R = 12, T = 12, B = 24;
-    var pts = entries.filter(function (e) { return e[key] != null && !isNaN(e[key]); });
+    // Only values recorded on that day (bone markers are not carried forward on the chart).
+    var pts = [];
+    entries.forEach(function (e, i) { if (measuredOn(e, key)) pts.push({ e: e, i: i }); });
     var wrap = el('figure', { class: 'chart' });
     var cap = el('figcaption', null, [
       el('span', { text: spec.label }),
-      el('span', { class: 'meta', text: spec.unit + ' · ' + pts.length + ' days' })
+      el('span', { class: 'meta', text: spec.unit + ' · ' + pts.length + (pts.length === 1 ? ' reading' : ' readings') })
     ]);
     wrap.appendChild(cap);
-    if (!pts.length) { wrap.appendChild(el('p', { class: 'meta', text: 'No data yet.' })); return wrap; }
+    if (!pts.length) { wrap.appendChild(el('p', { class: 'meta', text: spec.optional ? 'Not measured in this period (optional).' : 'No data yet.' })); return wrap; }
 
-    var vals = pts.map(function (e) { return e[key]; });
-    var lo = Math.min.apply(null, vals.concat([spec.yellow[0]]));
-    var hi = Math.max.apply(null, vals.concat([spec.yellow[1]]));
-    var padY = (hi - lo) * 0.08 || 1;
+    // Y domain from the data plus any band edges that are not open-ended.
+    var lim = spec.input;
+    var inner = [spec.green[0], spec.green[1], spec.yellow[0], spec.yellow[1]].filter(function (b) { return b > lim.min && b < lim.max; });
+    var vals = pts.map(function (p) { return p.e[key]; });
+    var lo = Math.min.apply(null, vals.concat(inner));
+    var hi = Math.max.apply(null, vals.concat(inner));
+    var padY = (hi - lo) * 0.12 || 1;
     lo -= padY; hi += padY;
-    var n = pts.length;
-    var x = function (i) { return n === 1 ? L + (W - L - R) / 2 : L + i * (W - L - R) / (n - 1); };
+    var span = Math.max(1, entries.length - 1);
+    var x = function (i) { return entries.length === 1 ? L + (W - L - R) / 2 : L + i * (W - L - R) / span; };
     var y = function (v) { return T + (hi - v) * (H - T - B) / (hi - lo); };
     var clampY = function (v) { return Math.max(T, Math.min(H - B, y(v))); };
+    var last = pts[pts.length - 1];
 
     var root = svg('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart-svg', role: 'img',
-      'aria-label': spec.label + ' over the last ' + n + ' days. Latest ' + fmt(key, vals[n - 1]) + ' ' + spec.unit +
-        ', reference range ' + fmtRange(key, spec.green) + '.' });
+      'aria-label': spec.label + ', ' + pts.length + ' readings in the last ' + entries.length + ' days. Latest ' + withUnit(key, last.e[key]) +
+        ', reference ' + fmtRef(key) + '.' });
 
     // Reference bands: yellow (monitor) under green (within range)
     root.appendChild(svg('rect', { class: 'band band-yellow', x: L, width: W - L - R,
@@ -667,28 +764,30 @@
     root.appendChild(svg('rect', { class: 'band band-green', x: L, width: W - L - R,
       y: clampY(spec.green[1]), height: clampY(spec.green[0]) - clampY(spec.green[1]) }));
 
-    // Y labels at the green bounds, X labels at ends
+    // Y labels at the interior green bounds, X labels at the ends of the window
     [spec.green[0], spec.green[1]].forEach(function (v) {
+      if (v <= lim.min || v >= lim.max) return;
       root.appendChild(svg('line', { class: 'gridline', x1: L, x2: W - R, y1: y(v), y2: y(v) }));
       root.appendChild(svg('text', { class: 'axis', x: L - 6, y: y(v) + 3, 'text-anchor': 'end', text: fmt(key, v) }));
     });
-    root.appendChild(svg('text', { class: 'axis', x: L, y: H - 6, text: shortDate(pts[0].date) }));
-    root.appendChild(svg('text', { class: 'axis', x: W - R, y: H - 6, 'text-anchor': 'end', text: shortDate(pts[n - 1].date) }));
+    root.appendChild(svg('text', { class: 'axis', x: L, y: H - 6, text: shortDate(entries[0].date) }));
+    root.appendChild(svg('text', { class: 'axis', x: W - R, y: H - 6, 'text-anchor': 'end', text: shortDate(entries[entries.length - 1].date) }));
 
     // Line
-    var d = pts.map(function (e, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(e[key]).toFixed(1); }).join(' ');
+    var d = pts.map(function (p, n) { return (n ? 'L' : 'M') + x(p.i).toFixed(1) + ' ' + y(p.e[key]).toFixed(1); }).join(' ');
     root.appendChild(svg('path', { class: 'trend-line', d: d }));
 
-    // Markers: out-of-range days, user entries, and the latest point
-    pts.forEach(function (e, i) {
-      var st = evaluate(key, e[key]);
-      var isLast = i === n - 1;
-      if (st === 'green' && !isLast && e.source !== 'user') return;
-      root.appendChild(svg('circle', { class: 'marker' + (e.source === 'user' ? ' user' : ''), 'data-status': st,
-        cx: x(i), cy: y(e[key]), r: isLast ? 5 : 4 }));
+    // Markers: out-of-range days, user entries, sparse series, and the latest point
+    var sparse = pts.length <= 8;
+    pts.forEach(function (p) {
+      var st = evaluate(key, p.e[key]);
+      var isLast = p === last;
+      if (st === 'green' && !isLast && !sparse && p.e.source !== 'user') return;
+      root.appendChild(svg('circle', { class: 'marker' + (p.e.source === 'user' ? ' user' : ''), 'data-status': st,
+        cx: x(p.i), cy: y(p.e[key]), r: isLast ? 5 : 4 }));
     });
 
-    // Hover layer
+    // Hover layer: snaps to the nearest recorded point
     var cross = svg('line', { class: 'crosshair', y1: T, y2: H - B, x1: 0, x2: 0, visibility: 'hidden' });
     var dot = svg('circle', { class: 'hover-dot', r: 5, visibility: 'hidden' });
     root.appendChild(cross);
@@ -700,17 +799,17 @@
     function show(ev) {
       var rect = root.getBoundingClientRect();
       var px = (ev.clientX - rect.left) * W / rect.width;
-      var i = n === 1 ? 0 : Math.round((px - L) / ((W - L - R) / (n - 1)));
-      i = Math.max(0, Math.min(n - 1, i));
-      var e = pts[i], st = evaluate(key, e[key]);
-      cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
-      dot.setAttribute('cx', x(i)); dot.setAttribute('cy', y(e[key])); dot.setAttribute('data-status', st); dot.setAttribute('visibility', 'visible');
+      var best = pts[0];
+      pts.forEach(function (p) { if (Math.abs(x(p.i) - px) < Math.abs(x(best.i) - px)) best = p; });
+      var e = best.e, st = evaluate(key, e[key]);
+      cross.setAttribute('x1', x(best.i)); cross.setAttribute('x2', x(best.i)); cross.setAttribute('visibility', 'visible');
+      dot.setAttribute('cx', x(best.i)); dot.setAttribute('cy', y(e[key])); dot.setAttribute('data-status', st); dot.setAttribute('visibility', 'visible');
       tip.innerHTML = '';
-      tip.appendChild(el('strong', { text: fmt(key, e[key]) + ' ' + spec.unit }));
+      tip.appendChild(el('strong', { text: withUnit(key, e[key]) }));
       tip.appendChild(el('span', { text: fmtDate(e.date) + (e.source === 'synthetic' ? ' · synthetic' : ' · your entry') }));
       tip.appendChild(el('span', { class: 'tip-status', 'data-status': st, text: CFG.statusText[st] }));
       tip.hidden = false;
-      var left = x(i) / W * rect.width;
+      var left = x(best.i) / W * rect.width;
       tip.style.left = Math.max(60, Math.min(rect.width - 60, left)) + 'px';
     }
     function hide() { cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); tip.hidden = true; }
@@ -737,7 +836,8 @@
     entries.slice().reverse().forEach(function (e) {
       var tr = el('tr', null, [el('th', { scope: 'row', text: shortDate(e.date) + (e.source === 'user' ? ' •' : '') })]);
       keys.forEach(function (k) {
-        tr.appendChild(el('td', { 'data-status': evaluate(k, e[k]), text: fmt(k, e[k]) }));
+        var m = measuredOn(e, k);
+        tr.appendChild(el('td', { 'data-status': m ? evaluate(k, e[k]) : 'unknown', text: m ? fmt(k, e[k]) : '—' }));
       });
       tb.appendChild(tr);
     });
@@ -745,7 +845,7 @@
     return el('details', { class: 'table-view' }, [
       el('summary', { text: 'Show data table' }),
       el('div', { class: 'table-scroll' }, [table]),
-      el('p', { class: 'meta', text: '• = your entry. Other rows are synthetic demo data.' })
+      el('p', { class: 'meta', text: '• = your entry. Other rows are synthetic demo data. Exercise columns are 7-day totals; bone markers appear only on days they were measured.' })
     ]);
   }
 
@@ -786,7 +886,11 @@
     setTimeout(function () { focusHazard(chip.getAttribute('data-hazard')); }, 200);
   });
   backdrop.addEventListener('click', closeDrawer);
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') closeDrawer(); });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape') return;
+    if (typeof closeReactionTest === 'function' && closeReactionTest()) return;
+    closeDrawer();
+  });
 
   /* ------------------------------------------------------------------ *
    * Check-in form
@@ -795,27 +899,87 @@
   var formError = document.getElementById('form-error');
 
   function setupForm() {
-    ['systolic', 'diastolic', 'heartRate', 'glucose', 'temperature', 'sleep'].forEach(function (k) {
+    FORM_FIELDS.forEach(function (k) {
       var input = form.elements[k];
+      if (!input || input.type !== 'number') return;
       var lim = IND[k].input;
       input.min = lim.min; input.max = lim.max; input.step = lim.step;
     });
     form.elements.date.value = todayIso();
     form.elements.date.max = todayIso();
-    // Pre-fill with the latest values as a convenient starting point.
+    // Pre-fill required fields with the latest values as a convenient starting point.
+    // Optional, periodic fields (bone markers, reaction test) start blank.
     var history = getHistory();
     var latest = history[history.length - 1];
     if (latest) {
-      INDICATOR_KEYS.forEach(function (k) {
+      FORM_FIELDS.forEach(function (k) {
+        if (IND[k].optional) return;
         if (k === 'mood') {
           var r = form.querySelector('input[name="mood"][value="' + latest.mood + '"]');
           if (r) r.checked = true;
-        } else {
+        } else if (latest[k] != null) {
           form.elements[k].value = fmt(k, latest[k]);
         }
       });
     }
+    ['resistiveMin', 'aerobicMin', 'date'].forEach(function (k) {
+      form.elements[k].addEventListener('input', updateExerciseNote);
+    });
+    updateExerciseNote();
+    updateReactionSummary();
   }
+
+  /** Live 7-day totals for the form: the 6 days before the chosen date plus today's inputs. */
+  function updateExerciseNote() {
+    var date = form.elements.date.value;
+    var note = document.getElementById('exercise-7d');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { note.textContent = ''; return; }
+    var history = getHistory();
+    var parts = ['resistive7d', 'aerobic7d'].map(function (k) {
+      var spec = IND[k], from = spec.derived.from, sum = 0;
+      history.forEach(function (e) {
+        var dd = dayDiff(e.date, date);
+        if (dd > 0 && dd < spec.derived.days && typeof e[from] === 'number') sum += e[from];
+      });
+      var today = parseFloat(form.elements[from].value);
+      if (!isNaN(today)) sum += today;
+      var st = evaluate(k, sum);
+      return { text: (k === 'resistive7d' ? 'Resistive ' : 'Aerobic ') + sum + ' min', st: st };
+    });
+    note.innerHTML = '';
+    note.appendChild(document.createTextNode('7-day totals incl. this entry: '));
+    parts.forEach(function (p, i) {
+      if (i) note.appendChild(document.createTextNode(' · '));
+      var span = el('span', { class: 'inline-status', 'data-status': p.st, title: CFG.statusText[p.st] }, [el('span', { class: 'dot' })]);
+      span.appendChild(document.createTextNode(p.text));
+      note.appendChild(span);
+    });
+  }
+
+  function updateReactionSummary() {
+    var med = form.elements.reactionMedian.value, lap = form.elements.lapses.value;
+    var summary = document.getElementById('rt-summary');
+    var has = med !== '' && lap !== '';
+    summary.innerHTML = '';
+    if (!has) {
+      summary.textContent = 'Not tested yet';
+    } else {
+      ['reactionMedian', 'lapses'].forEach(function (k, i) {
+        var v = parseFloat(form.elements[k].value);
+        if (i) summary.appendChild(document.createTextNode(' · '));
+        var span = el('span', { class: 'inline-status', 'data-status': evaluate(k, v) }, [el('span', { class: 'dot' })]);
+        span.appendChild(document.createTextNode(k === 'reactionMedian' ? 'Median ' + v + ' ms' : v + (v === 1 ? ' lapse' : ' lapses')));
+        summary.appendChild(span);
+      });
+    }
+    document.getElementById('rt-clear').hidden = !has;
+  }
+
+  document.getElementById('rt-clear').addEventListener('click', function () {
+    form.elements.reactionMedian.value = '';
+    form.elements.lapses.value = '';
+    updateReactionSummary();
+  });
 
   form.addEventListener('submit', function (ev) {
     ev.preventDefault();
@@ -827,23 +991,26 @@
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { errors.push('Choose a date.'); form.elements.date.classList.add('invalid'); }
     entry.date = date;
 
-    INDICATOR_KEYS.forEach(function (k) {
-      var lim = IND[k].input;
+    FORM_FIELDS.forEach(function (k) {
+      var spec = IND[k], lim = spec.input;
+      var input = k === 'mood' ? null : form.elements[k];
       var raw = k === 'mood'
         ? (form.querySelector('input[name="mood"]:checked') || {}).value
-        : form.elements[k].value;
+        : input.value;
       var v = parseFloat(raw);
-      if (raw === undefined || raw === '' || isNaN(v)) {
-        errors.push(IND[k].short + ' is required.');
-        if (k !== 'mood') form.elements[k].classList.add('invalid');
+      var blank = raw === undefined || raw === '' || isNaN(v);
+      if (blank && spec.optional) return;
+      if (blank) {
+        errors.push(spec.short + ' is required.');
+        if (input) input.classList.add('invalid');
         return;
       }
       if (v < lim.min || v > lim.max) {
-        errors.push(IND[k].short + ' must be between ' + lim.min + ' and ' + lim.max + ' ' + IND[k].unit + '.');
-        if (k !== 'mood') form.elements[k].classList.add('invalid');
+        errors.push(spec.short + ' must be between ' + lim.min + ' and ' + lim.max + ' ' + spec.unit + '.');
+        if (input) input.classList.add('invalid');
         return;
       }
-      entry[k] = IND[k].decimals ? Math.round(v * 10) / 10 : Math.round(v);
+      entry[k] = spec.decimals ? Math.round(v * 10) / 10 : Math.round(v);
     });
     if (!errors.length && entry.diastolic >= entry.systolic) {
       errors.push('Diastolic should be lower than systolic. Please re-check the reading.');
@@ -859,7 +1026,187 @@
     userEntries.push(entry);
     saveUserEntries();
     render();
+    updateExerciseNote();
     toast('Check-in recorded for ' + fmtDate(entry.date) + ' · overall: ' + CFG.statusText[overallStatus(getHistory().slice(-1)[0])]);
+  });
+
+  /* ------------------------------------------------------------------ *
+   * Reaction self-test (inspired by the psychomotor vigilance test)
+   * Not a validated clinical test.
+   * ------------------------------------------------------------------ */
+  var RT = CFG.reactionTest;
+  var rtOverlay = document.getElementById('rt-overlay');
+  var rtTarget = document.getElementById('rt-target');
+  var rtFeedback = document.getElementById('rt-feedback');
+  var rt = null;            // state of the running test
+  var rtResult = null;      // last completed result
+  var rtTrigger = null;
+
+  function rtShow(step) {
+    ['rt-intro', 'rt-run', 'rt-result'].forEach(function (id) { document.getElementById(id).hidden = id !== step; });
+  }
+
+  function openReactionTest(trigger) {
+    rtTrigger = trigger || null;
+    rtResult = null;
+    rtShow('rt-intro');
+    rtOverlay.hidden = false;
+    requestAnimationFrame(function () { rtOverlay.classList.add('open'); });
+    document.getElementById('rt-start').focus({ preventScroll: true });
+  }
+
+  function closeReactionTest() {
+    if (rtOverlay.hidden) return false;
+    stopTest();
+    rtOverlay.classList.remove('open');
+    rtOverlay.hidden = true;
+    if (rtTrigger && rtTrigger.focus) rtTrigger.focus({ preventScroll: true });
+    return true;
+  }
+
+  function startTest() {
+    rt = { trials: [], falseStarts: 0, lit: false, litAt: 0, trialId: 0, timers: [], endAt: performance.now() + RT.durationSec * 1000 };
+    rtShow('rt-run');
+    rtTarget.classList.remove('lit');
+    rtFeedback.textContent = 'Wait…';
+    rtTarget.focus({ preventScroll: true });
+    tickProgress();
+    scheduleNext();
+  }
+
+  function stopTest() {
+    if (!rt) return;
+    rt.timers.forEach(clearTimeout);
+    cancelAnimationFrame(rt.raf);
+    rt = null;
+    rtTarget.classList.remove('lit');
+  }
+
+  function tickProgress() {
+    if (!rt) return;
+    var left = Math.max(0, rt.endAt - performance.now());
+    document.getElementById('rt-bar').style.width = (100 - left / (RT.durationSec * 10)) + '%';
+    document.getElementById('rt-status').textContent = 'Time left ' + Math.ceil(left / 1000) + ' s · ' + rt.trials.length + ' responses';
+    rt.raf = requestAnimationFrame(tickProgress);
+  }
+
+  function scheduleNext() {
+    var delay = RT.minDelayMs + Math.random() * (RT.maxDelayMs - RT.minDelayMs);
+    var now = performance.now();
+    if (now + delay >= rt.endAt) {
+      rt.timers.push(setTimeout(finishTest, Math.max(0, rt.endAt - now)));
+      return;
+    }
+    rt.timers.push(setTimeout(function () {
+      if (!rt) return;
+      var id = ++rt.trialId;
+      rt.lit = true;
+      rt.litAt = performance.now();
+      rtTarget.classList.add('lit');
+      rtFeedback.textContent = 'Tap!';
+      rt.timers.push(setTimeout(function () {
+        if (!rt || !rt.lit || rt.trialId !== id) return;
+        rt.timers = [];
+        rt.lit = false;
+        rt.trials.push(RT.timeoutMs);           // no response: recorded as a lapse
+        rtTarget.classList.remove('lit');
+        rtFeedback.textContent = 'Missed';
+        scheduleNext();
+      }, RT.timeoutMs));
+    }, delay));
+  }
+
+  function respond() {
+    if (!rt) return;
+    var now = performance.now();
+    if (!rt.lit) {
+      rt.falseStarts++;
+      rtFeedback.textContent = 'Too early';
+      return;
+    }
+    var ms = Math.round(now - rt.litAt);
+    rt.lit = false;
+    rt.timers.forEach(clearTimeout);      // cancel this light's no-response timeout
+    rt.timers = [];
+    rtTarget.classList.remove('lit');
+    if (ms < RT.falseStartMs) {
+      rt.falseStarts++;
+      rtFeedback.textContent = 'Too early';
+    } else {
+      rt.trials.push(ms);
+      rtFeedback.textContent = ms + ' ms';
+    }
+    scheduleNext();
+  }
+
+  function median(arr) {
+    var a = arr.slice().sort(function (x, y) { return x - y; });
+    var m = Math.floor(a.length / 2);
+    return a.length % 2 ? a[m] : Math.round((a[m - 1] + a[m]) / 2);
+  }
+
+  function finishTest() {
+    if (!rt) return;
+    var trials = rt.trials, falseStarts = rt.falseStarts;
+    stopTest();
+    var enough = trials.length >= RT.minResponses;
+    rtResult = enough ? {
+      reactionMedian: median(trials),
+      lapses: trials.filter(function (t) { return t > RT.lapseMs; }).length
+    } : null;
+
+    var stats = document.getElementById('rt-stats');
+    stats.innerHTML = '';
+    function stat(label, value, st) {
+      stats.appendChild(el('div', { class: 'stat', 'data-status': st || 'unknown' }, [
+        el('span', { class: 'stat-label', text: label }),
+        el('span', { class: 'stat-val', text: value })
+      ]));
+    }
+    var medStatus = rtResult ? evaluate('reactionMedian', rtResult.reactionMedian) : 'unknown';
+    var lapStatus = rtResult ? evaluate('lapses', rtResult.lapses) : 'unknown';
+    stat('Median reaction', rtResult ? rtResult.reactionMedian + ' ms' : '—', medStatus);
+    stat('Lapses > ' + RT.lapseMs + ' ms', rtResult ? String(rtResult.lapses) : '—', lapStatus);
+    stat('Responses', String(trials.length));
+    stat('False starts', String(falseStarts));
+
+    var advice = document.getElementById('rt-advice');
+    var alert = worst([medStatus, lapStatus]);
+    if (!enough) {
+      advice.className = 'alertness-note';
+      advice.textContent = 'Not enough responses (' + trials.length + ' of ' + RT.minResponses + ' needed) to give a result. Try again when you can focus for a full minute.';
+    } else if (alert === 'yellow' || alert === 'red') {
+      advice.className = 'alertness-note warn';
+      advice.textContent = (CONTENT.regions.brain && CONTENT.regions.brain.alertness) || '';
+    } else {
+      advice.className = 'alertness-note';
+      advice.textContent = 'Within the reference range. Compare with your own trend over the coming days.';
+    }
+    document.getElementById('rt-use').disabled = !enough;
+    rtShow('rt-result');
+    document.getElementById(enough ? 'rt-use' : 'rt-again').focus({ preventScroll: true });
+  }
+
+  rtTarget.addEventListener('pointerdown', function (ev) { ev.preventDefault(); respond(); });
+  rtTarget.addEventListener('click', function (ev) { ev.preventDefault(); });
+  document.addEventListener('keydown', function (ev) {
+    if (!rt || (ev.key !== ' ' && ev.key !== 'Enter')) return;
+    ev.preventDefault();
+    if (!ev.repeat) respond();
+  });
+  document.getElementById('rt-start').addEventListener('click', startTest);
+  document.getElementById('rt-again').addEventListener('click', startTest);
+  document.getElementById('rt-close').addEventListener('click', closeReactionTest);
+  document.getElementById('rt-open').addEventListener('click', function (ev) { openReactionTest(ev.currentTarget); });
+  rtOverlay.addEventListener('click', function (ev) { if (ev.target === rtOverlay) closeReactionTest(); });
+  document.getElementById('rt-use').addEventListener('click', function () {
+    if (!rtResult) return;
+    form.elements.reactionMedian.value = rtResult.reactionMedian;
+    form.elements.lapses.value = rtResult.lapses;
+    updateReactionSummary();
+    rtTrigger = openKey ? document.getElementById('drawer-close') : document.getElementById('rt-open');
+    closeReactionTest();
+    toast('Reaction results added to the check-in form. Record the check-in to save them.');
   });
 
   document.getElementById('clear-user').addEventListener('click', function () {

@@ -66,6 +66,29 @@
   last.systolic = 134; last.diastolic = 86; last.heartRate = 74;
   last.glucose = 92; last.temperature = 36.8; last.sleep = 7.2; last.mood = 3;
 
+  // ---- Stage 6 indicators (SYNTHETIC) -------------------------------------
+  // A separate seeded generator keeps the earlier synthetic values unchanged.
+  var rand2 = mulberry32(2027);
+  function noise2() { return rand2() + rand2() + rand2() - 1.5; }
+  history.forEach(function (e, idx) {
+    var t = idx / (DAYS - 1);
+    var late = Math.max(0, (t - 0.7) / 0.3);
+    var restDay = idx % 7 === 3;                       // one lighter day per week
+    e.resistiveMin = restDay ? 0 : Math.max(0, Math.round(55 - 10 * late + noise2() * 6));
+    e.aerobicMin = restDay ? 20 : Math.max(0, Math.round(36 - 6 * late + noise2() * 5));
+    e.reactionMedian = Math.round(262 + 38 * late + noise2() * 12);
+    e.lapses = late > 0.5 ? Math.round(late * 2 + rand2() * 0.8) : (rand2() < 0.15 ? 1 : 0);
+  });
+  // The short-sleep night mid-month shows up as slower reactions.
+  mid.reactionMedian = 352; mid.lapses = 3;
+  // Bone markers are periodic samples (not daily): % change vs preflight baseline.
+  // Values drift upward over the month, as reported in spaceflight research.
+  history[3].urinaryCalcium = 12; history[3].boneResorption = 18;
+  history[17].urinaryCalcium = 24; history[17].boneResorption = 31;
+  history[DAYS - 2].urinaryCalcium = 27; history[DAYS - 2].boneResorption = 36;
+  // Pinned latest day.
+  last.resistiveMin = 45; last.aerobicMin = 30; last.reactionMedian = 312; last.lapses = 2;
+
   window.AURA_SYNTHETIC_HISTORY = history;
 })();
 
@@ -86,37 +109,37 @@ window.AURA_CONTENT = {
       name: 'Space radiation', short: 'Radiation',
       summary: 'Beyond the protection of Earth\'s atmosphere and magnetic field, crews receive higher doses of radiation, including from solar particle events.',
       effect: 'Over long missions, radiation may affect the central nervous system, immune cells and blood vessels. Most effects build slowly and are not visible day to day.',
-      indicators: ['mood', 'sleep', 'temperature', 'systolic', 'diastolic']
+      indicators: ['mood', 'sleep', 'reactionMedian', 'temperature', 'systolic', 'diastolic', 'boneResorption']
     },
     isolation: {
       name: 'Isolation and confinement', short: 'Isolation',
       summary: 'Crews live and work in a small space with the same few people for months, far from family and friends.',
       effect: 'Isolation and workload may affect mood, sleep and team dynamics, and stress may show up in heart rate, blood pressure and glucose.',
-      indicators: ['mood', 'sleep', 'heartRate', 'systolic', 'diastolic', 'glucose']
+      indicators: ['mood', 'sleep', 'reactionMedian', 'lapses', 'heartRate', 'systolic', 'diastolic', 'glucose']
     },
     distance: {
       name: 'Distance from Earth', short: 'Distance',
       summary: 'The farther from Earth, the longer the communication delay and the less real-time support, medical care and resupply.',
       effect: 'Greater autonomy may add stress that affects mood and sleep. Limited care options make early self-monitoring of every indicator more important.',
-      indicators: ['mood', 'sleep']
+      indicators: ['mood', 'sleep', 'lapses']
     },
     gravity: {
       name: 'Gravity fields', short: 'Gravity',
       summary: 'Crews move between gravity fields: weightlessness in flight, partial gravity on the Moon or Mars, and full gravity on return to Earth.',
-      effect: 'Fluid shifts and reduced loading may affect blood pressure, heart rate and glucose handling, and may lead to bone and muscle loss without exercise.',
-      indicators: ['systolic', 'diastolic', 'heartRate', 'glucose']
+      effect: 'Fluid shifts and reduced loading may affect blood pressure, heart rate and glucose handling. Unloading may raise urinary calcium and bone resorption markers and may lead to bone and muscle loss, which exercise reduces but does not fully prevent.',
+      indicators: ['systolic', 'diastolic', 'heartRate', 'glucose', 'resistive7d', 'aerobic7d', 'urinaryCalcium', 'boneResorption']
     },
     environment: {
       name: 'Hostile and closed environments', short: 'Closed environment',
       summary: 'The spacecraft is a closed system. Air quality, CO₂, noise, lighting, temperature and microbes all need careful control.',
-      effect: 'Noise, light and CO₂ may affect sleep and mood, and shared air and surfaces may affect exposure to microbes, which can show in body temperature.',
-      indicators: ['sleep', 'mood', 'temperature', 'heartRate']
+      effect: 'Noise, light and CO₂ may affect sleep, mood and alertness. Limited space may make exercise harder, and shared air and surfaces may affect exposure to microbes, which can show in body temperature.',
+      indicators: ['sleep', 'mood', 'reactionMedian', 'lapses', 'temperature', 'resistive7d']
     }
   },
 
   regions: {
     brain: {
-      what: 'The brain coordinates attention, memory, emotion and the sleep–wake cycle. Daily mood and sleep are simple indicators of how well the mind is coping with mission demands.',
+      what: 'The brain coordinates attention, memory, emotion and the sleep–wake cycle. Daily mood, sleep and a short reaction test are simple indicators of how well the mind is coping with mission demands.',
       hazards: [
         { id: 'isolation', why: 'Long periods with a small crew, away from family and friends, may affect mood, motivation and team dynamics.' },
         { id: 'environment', why: 'Noise, artificial light, shifted schedules and elevated CO₂ may affect sleep quality.' },
@@ -126,7 +149,14 @@ window.AURA_CONTENT = {
       measure: [
         'Sleep: log hours from your sleep-tracking wearable or sleep diary right after waking. Note wake-ups and naps.',
         'Mood: rate yourself 1–5 at the same time every day, before high-workload tasks. Be honest; the trend matters more than any single score.',
-        'In microgravity, sleep in a secured sleeping bag with eye mask and earplugs so readings reflect your normal routine.'
+        'In microgravity, sleep in a secured sleeping bag with eye mask and earplugs so readings reflect your normal routine.',
+        'Alertness: run the 1-minute reaction self-test at the same time each day, in a quiet spot, before caffeine if possible. Brace yourself with a foot restraint and hold the device steady.'
+      ],
+      alertness: 'Low alertness can signal fatigue; consider rest and contact your flight surgeon.',
+      research: [
+        'The reaction self-test is inspired by the psychomotor vigilance test (PVT). NASA\'s Reaction Self Test on the ISS used a brief 3-minute PVT to help astronauts track their alertness.',
+        'Studies of ISS crews have reported slower psychomotor speed on days with 6 hours of sleep or less.',
+        'The in-app test lasts 1 minute and is not a validated clinical test. Use it to watch your own trend over days, not as a single score.'
       ],
       actions: {
         green: [
@@ -136,7 +166,7 @@ window.AURA_CONTENT = {
         yellow: [
           'Protect a 7–9 hour sleep window tonight: dim lights early, limit screens, use eye mask and earplugs.',
           'Talk with a crewmate you trust or request a private conference with crew support.',
-          'Re-check mood and sleep for the next 2–3 days to see whether the trend continues.'
+          'Re-check mood, sleep and the reaction test for the next 2–3 days to see whether the trend continues.'
         ],
         red: [
           'Where mission rules allow, defer non-essential high-workload or high-risk tasks until you have been reviewed.',
@@ -242,7 +272,12 @@ window.AURA_CONTENT = {
     },
 
     musculoskeletal: {
-      what: 'Bones support the body and store minerals; muscles provide strength and posture. Without weight-bearing activity, both can lose mass. AURA-CREW uses resting heart rate and sleep as proxy indicators, because the daily check-in has no direct bone or muscle measure.',
+      what: 'Bones support the body and store minerals such as calcium; muscles provide strength and posture. Without weight-bearing activity, both can lose mass. AURA-CREW tracks the main countermeasure, exercise, as 7-day totals, plus two optional bone markers when they are available.',
+      research: [
+        'NASA research reports that urinary calcium and bone resorption (breakdown) markers rise during spaceflight, while bone formation markers stay unchanged or fall. This imbalance may lead to bone loss over a mission.',
+        'Exercise countermeasures, such as resistive and aerobic exercise on the ISS, reduce but do not fully prevent muscle and bone loss.',
+        'These markers are not measured daily in flight. They come from periodic urine or blood samples, so the two marker fields in the check-in are optional. When provided, the most recent value (up to 30 days old) is used for status.'
+      ],
       hazards: [
         { id: 'gravity', why: 'Microgravity removes most loading from bones and muscles; without countermeasures, bone density and muscle strength may decline over weeks to months.' },
         { id: 'environment', why: 'Limited space and equipment may make it harder to complete a full exercise program.' },
@@ -250,24 +285,25 @@ window.AURA_CONTENT = {
         { id: 'radiation', why: 'Radiation may affect bone cells; this is still being studied.' }
       ],
       measure: [
-        'Resting heart rate: measure on waking, before getting out of your sleeping bag, using your wearable or cuff.',
-        'Log each exercise session (resistance and aerobic) and whether it was completed in full.',
-        'Bone density and muscle strength are assessed by your medical team on their own schedule; AURA-CREW does not measure them.'
+        'Exercise: log the minutes of resistive (e.g. advanced resistive exercise device) and aerobic (treadmill with harness, cycle ergometer) exercise you completed today. Count only time under load, not setup.',
+        'AURA-CREW adds up the last 7 days, including today, so a single rest day does not change the status much.',
+        'Urinary calcium and bone resorption markers: enter the % change versus your preflight baseline only when your medical team shares a new result from a scheduled urine or blood sample.',
+        'Bone density and muscle strength scans are done by your medical team on their own schedule; AURA-CREW does not measure them.'
       ],
       actions: {
         green: [
-          'Complete your daily resistance and aerobic exercise protocol.',
-          'Keep a regular sleep schedule to support recovery.'
+          'Keep completing your daily resistive and aerobic exercise protocol.',
+          'Keep following the mission diet plan, including calcium and vitamin D as prescribed.'
         ],
         yellow: [
-          'Do not skip resistance sessions; they are the main countermeasure for bone and muscle loss.',
-          'Prioritize sleep for recovery tonight.',
-          'Check resting heart rate again tomorrow morning to see the trend.'
+          'Plan to make up missed resistive sessions this week; resistive loading is the main countermeasure for bone and muscle.',
+          'Review your exercise schedule with your fitness or medical team if workload is crowding it out.',
+          'If bone markers are rising, ask your medical team when the next sample is planned.'
         ],
         red: [
-          'Hold strenuous exercise until your medical officer has reviewed the readings.',
-          'Note any pain, injury or unusual fatigue.',
-          'Keep logging resting heart rate and sleep daily.'
+          'Share your exercise log and any marker results with your medical officer.',
+          'Do not try to catch up with a single maximal session; follow the protocol your team sets.',
+          'Note any pain, injury or unusual fatigue.'
         ]
       }
     }
