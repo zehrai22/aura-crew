@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AURA-CREW · Crew Health Indicators</title>
+  <meta name="description" content="AURA-CREW: astronaut self-check-in and health indicator decision support. Synthetic demo data.">
+  <meta name="theme-color" content="#04080f">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <h1>AURA-CREW</h1>
+        <p class="tagline">Crew health indicators · decision support</p>
+      </div>
+    </div>
+    <div class="topbar-meta">
+      <span class="badge badge-synthetic" id="synthetic-badge" title="The history includes made-up demo entries from data.js">Synthetic demo data</span>
+      <span class="badge badge-muted">Decision support only</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Body figure -->
+    <section class="panel figure-panel" aria-labelledby="figure-title">
+      <div class="panel-head">
+        <h2 id="figure-title">Body systems</h2>
+        <span class="status-chip" id="overall-chip">—</span>
+      </div>
+      <div class="figure-wrap">
+        <svg id="body-svg" viewBox="-70 0 440 600" role="group" aria-label="Body systems figure. Select a system for details."></svg>
+        <div class="scanline" aria-hidden="true"></div>
+      </div>
+      <p class="hint">Select a body system to open its indicator panel.</p>
+    </section>
+
+    <!-- Status + latest readings -->
+    <section class="panel status-panel" aria-labelledby="status-title">
+      <div class="panel-head">
+        <h2 id="status-title">Overall status</h2>
+        <span class="meta" id="latest-date">—</span>
+      </div>
+      <div class="overall-card" id="overall-card">
+        <div class="overall-ring" aria-hidden="true"><span></span></div>
+        <div>
+          <p class="overall-label" id="overall-label">—</p>
+          <p class="overall-text" id="overall-text">—</p>
+        </div>
+      </div>
+      <ul class="system-list" id="system-list"></ul>
+      <h3 class="subhead">Latest indicators</h3>
+      <ul class="readings" id="readings"></ul>
+    </section>
+
+    <!-- Daily check-in -->
+    <section class="panel checkin-panel" aria-labelledby="checkin-title">
+      <div class="panel-head">
+        <h2 id="checkin-title">Daily check-in</h2>
+        <span class="meta" id="log-count">—</span>
+      </div>
+      <form id="checkin-form" novalidate>
+        <label class="field field-wide">
+          <span>Date</span>
+          <input type="date" name="date" required>
+        </label>
+        <fieldset class="field-group">
+          <legend>Blood pressure <em>mmHg</em></legend>
+          <label class="field"><span>Systolic</span><input type="number" name="systolic" inputmode="numeric" required></label>
+          <label class="field"><span>Diastolic</span><input type="number" name="diastolic" inputmode="numeric" required></label>
+        </fieldset>
+        <label class="field"><span>Heart rate <em>bpm</em></span><input type="number" name="heartRate" inputmode="numeric" required></label>
+        <label class="field"><span>Blood glucose <em>mg/dL</em></span><input type="number" name="glucose" inputmode="numeric" required></label>
+        <label class="field"><span>Body temp <em>°C</em></span><input type="number" name="temperature" inputmode="decimal" required></label>
+        <label class="field"><span>Sleep <em>hours</em></span><input type="number" name="sleep" inputmode="decimal" required></label>
+        <fieldset class="field-wide mood">
+          <legend>Mood <em>1 = very low · 5 = very good</em></legend>
+          <div class="mood-scale">
+            <label><input type="radio" name="mood" value="1"><span>1</span></label>
+            <label><input type="radio" name="mood" value="2"><span>2</span></label>
+            <label><input type="radio" name="mood" value="3"><span>3</span></label>
+            <label><input type="radio" name="mood" value="4"><span>4</span></label>
+            <label><input type="radio" name="mood" value="5"><span>5</span></label>
+          </div>
+        </fieldset>
+        <p class="form-error" id="form-error" role="alert" hidden></p>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Record check-in</button>
+          <button type="button" class="btn btn-ghost" id="clear-user">Clear my entries</button>
+        </div>
+        <p class="fineprint">Entries are stored only in this browser (localStorage). An entry for a date replaces the synthetic entry for that date.</p>
+      </form>
+    </section>
+  </main>
+
+  <!-- Region detail drawer -->
+  <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <p class="eyebrow">Body system</p>
+        <h2 id="drawer-title">—</h2>
+      </div>
+      <button class="icon-btn" id="drawer-close" aria-label="Close panel">&times;</button>
+    </div>
+    <div class="drawer-body" id="drawer-body"></div>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <footer class="footer">
+    <p>AURA-CREW is a NASA Space Apps 2026 challenge prototype. It shows <strong>indicators</strong> for <strong>decision support only</strong> and does not diagnose. Confirm everything with your medical officer.</p>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

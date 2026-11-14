@@ -1,1 +1,57 @@
-# aura-crew
+# AURA-CREW
+
+**Crew health indicators and decision support for astronauts.** Built for the NASA Space Apps 2026 challenge *"Create Health Monitoring Software for Astronauts on Space Missions"*.
+
+An astronaut records a short daily check-in. AURA-CREW compares each reading with configurable reference ranges and shows which body systems may need attention on an interactive body figure.
+
+> **Decision support only.** AURA-CREW shows *indicators*. It does not diagnose. Always confirm with your medical officer or flight surgeon.
+>
+> **Synthetic demo data.** The 30-day history in `data.js` is made up. It is not real astronaut or patient data, and the UI labels it with a "Synthetic demo data" badge.
+
+## Features
+
+- **Daily check-in** with blood pressure (systolic and diastolic), resting heart rate, blood glucose (mg/dL), body temperature, sleep hours and mood (1–5). A new entry updates the whole app right away. Entries are kept in your browser's `localStorage`, and an entry for a date replaces the synthetic entry for that date.
+- **Interactive 2D body figure** with five clickable systems: brain and mind, heart and cardiovascular, immune system, metabolism, and bones and muscle. Each one turns green (within range), yellow (monitor) or red (attention) based on the latest indicators it depends on. The overall status is shown alongside.
+- **Region panel** listing the indicators behind each system's status.
+
+## Project structure
+
+| File | Purpose |
+|---|---|
+| `index.html` | Page layout |
+| `style.css` | Holographic HUD styling, responsive layout, animations |
+| `app.js` | Status logic, SVG body figure, check-in form, region panel |
+| `config.js` | **All thresholds** and the indicator-to-system mapping (marked *ASSUMPTION*) |
+| `data.js` | 30 days of **synthetic** demo history (seeded and reproducible) |
+
+There is no build step, no backend and no dependencies.
+
+## Run locally
+
+Open `index.html` in a browser. To use a local server instead:
+
+```bash
+python3 -m http.server 8000
+# then open http://localhost:8000
+```
+
+## Deploy on GitHub Pages
+
+1. Push the files to the default branch of a GitHub repository (the files must sit at the repository root).
+2. On GitHub, go to **Settings → Pages**.
+3. Under **Build and deployment**, set **Source** to *Deploy from a branch*, then choose your branch and the `/ (root)` folder. Click **Save**.
+4. After a minute or so, the site is live at `https://<user>.github.io/<repo>/`.
+
+## Reference ranges
+
+Every threshold lives in `config.js` under the comment
+`ASSUMPTION - general adult reference ranges, to be reviewed against NASA HRP sources`.
+The values are general adult placeholders and are not mission or clinical criteria. The mapping of indicators to body systems is a simplified proxy. For example, bones and muscle use resting heart rate and sleep, because the daily check-in has no direct bone or muscle measure.
+
+## NASA Human Research Program references
+
+- 5 Hazards of Human Spaceflight — https://www.nasa.gov/hrp/hazards/
+- Risks of Human Spaceflight — https://humanresearchroadmap.nasa.gov/risks/
+- Ongoing HRP Research — https://www.nasa.gov/hrp/research/
+
+This project is not affiliated with or endorsed by NASA and uses no NASA logos or insignia.
