@@ -14,6 +14,8 @@ An astronaut records a short daily check-in. AURA-CREW compares each reading wit
 - **Interactive 2D body figure** with five clickable systems: brain and mind, heart and cardiovascular, immune system, metabolism, and bones and muscle. Each one turns green (within range), yellow (monitor) or red (attention) based on the latest indicators it depends on. The overall status is shown alongside.
 - **Region panel** for each system. It covers what the system does and why spaceflight may affect it, linked to the five NASA HRP hazards. It also has a 30-day trend chart per indicator (with reference bands, a hover tooltip and a data table), how to measure the indicators in space, and 2–3 recommended actions that depend on the current status. A red status adds a "Contact your flight surgeon" note. Every recommendation ends with "Decision support only, confirm with your medical officer."
 
+- **Hazards section** with a card for each of the five NASA HRP hazards. Each card says what the hazard is and which daily indicators it *may affect*, with their latest values and status, and links to the related body systems. The hazard chips in a region panel jump to the matching card.
+
 ## Project structure
 
 | File | Purpose |

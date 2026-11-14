@@ -351,7 +351,72 @@
       ]));
     });
 
+    renderHazards(latest);
     if (openKey) renderDrawer(openKey);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Hazards section
+   * ------------------------------------------------------------------ */
+  var HAZARD_ICONS = {
+    radiation: 'M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M12 3a9 9 0 0 1 7.8 4.5L14.6 10.5 M4.2 7.5A9 9 0 0 1 12 3v6 M7.5 19.8A9 9 0 0 0 16.5 19.8L13.5 14.6 M10.5 14.6L7.5 19.8',
+    isolation: 'M12 4a8 8 0 1 0 0.01 0Z M12 9a2.2 2.2 0 1 0 0.01 0Z M8.5 16.5c.8-1.8 2-2.6 3.5-2.6s2.7.8 3.5 2.6',
+    distance: 'M5 18a2 2 0 1 0 0.01 0Z M19 6a2 2 0 1 0 0.01 0Z M6.5 16.5L17.5 7.5 M3 6h4 M17 18h4',
+    gravity: 'M12 3v14 M7 12l5 5 5-5 M5 21h14',
+    environment: 'M4 8h16v10H4Z M8 8V5h8v3 M8 13h.01 M12 13h.01 M16 13h.01'
+  };
+
+  function renderHazards(latest) {
+    var grid = document.getElementById('hazard-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    Object.keys(CONTENT.hazards).forEach(function (id) {
+      var hz = CONTENT.hazards[id];
+      var icon = svg('svg', { viewBox: '0 0 24 24', class: 'hazard-icon', 'aria-hidden': 'true' }, [svg('path', { d: HAZARD_ICONS[id] || '' })]);
+
+      var inds = el('ul', { class: 'hz-indicators' });
+      (hz.indicators || []).forEach(function (k) {
+        var v = latest ? latest[k] : null;
+        var st = evaluate(k, v);
+        inds.appendChild(el('li', { 'data-status': st, title: CFG.statusText[st] }, [
+          el('span', { class: 'dot' }),
+          el('span', { text: IND[k].short }),
+          el('span', { class: 'hz-val', text: fmt(k, v) + ' ' + IND[k].unit })
+        ]));
+      });
+
+      var systems = el('div', { class: 'hz-systems' });
+      Object.keys(REGIONS).forEach(function (rk) {
+        var rc = CONTENT.regions[rk];
+        if (!rc || !rc.hazards.some(function (h) { return h.id === id; })) return;
+        var st = regionStatus(rk, latest);
+        var b = el('button', { type: 'button', class: 'hz-system', 'data-status': st }, [
+          el('span', { class: 'dot' }), el('span', { text: REGIONS[rk].name })
+        ]);
+        b.addEventListener('click', function () { openRegion(rk, b); });
+        systems.appendChild(b);
+      });
+
+      grid.appendChild(el('article', { class: 'hazard-card', id: 'hazard-' + id, tabindex: '-1' }, [
+        el('header', null, [icon, el('h3', { text: hz.name })]),
+        el('p', { class: 'hz-summary', text: hz.summary }),
+        el('p', { class: 'hz-effect', text: hz.effect }),
+        el('p', { class: 'hz-label', text: 'May affect these indicators' }),
+        inds,
+        el('p', { class: 'hz-label', text: 'Related body systems' }),
+        systems
+      ]));
+    });
+  }
+
+  function focusHazard(id) {
+    var card = document.getElementById('hazard-' + id);
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.focus({ preventScroll: true });
+    card.classList.remove('flash');
+    void card.offsetWidth;
+    card.classList.add('flash');
   }
 
   /* ------------------------------------------------------------------ *
@@ -606,6 +671,14 @@
   }
 
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+  document.getElementById('drawer-body').addEventListener('click', function (ev) {
+    var chip = ev.target.closest && ev.target.closest('a.hazard-chip');
+    if (!chip) return;
+    ev.preventDefault();
+    lastTrigger = null;
+    closeDrawer();
+    setTimeout(function () { focusHazard(chip.getAttribute('data-hazard')); }, 200);
+  });
   backdrop.addEventListener('click', closeDrawer);
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') closeDrawer(); });
 

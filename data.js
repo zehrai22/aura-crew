@@ -79,12 +79,39 @@
 window.AURA_CONTENT = {
   hazardsUrl: 'https://www.nasa.gov/hrp/hazards/',
 
+  // `indicators` lists daily check-in indicators each hazard MAY affect.
+  // These are possible influences, not certain cause and effect.
   hazards: {
-    radiation: { name: 'Space radiation', short: 'Radiation' },
-    isolation: { name: 'Isolation and confinement', short: 'Isolation' },
-    distance: { name: 'Distance from Earth', short: 'Distance' },
-    gravity: { name: 'Gravity fields', short: 'Gravity' },
-    environment: { name: 'Hostile and closed environments', short: 'Closed environment' }
+    radiation: {
+      name: 'Space radiation', short: 'Radiation',
+      summary: 'Beyond the protection of Earth\'s atmosphere and magnetic field, crews receive higher doses of radiation, including from solar particle events.',
+      effect: 'Over long missions, radiation may affect the central nervous system, immune cells and blood vessels. Most effects build slowly and are not visible day to day.',
+      indicators: ['mood', 'sleep', 'temperature', 'systolic', 'diastolic']
+    },
+    isolation: {
+      name: 'Isolation and confinement', short: 'Isolation',
+      summary: 'Crews live and work in a small space with the same few people for months, far from family and friends.',
+      effect: 'Isolation and workload may affect mood, sleep and team dynamics, and stress may show up in heart rate, blood pressure and glucose.',
+      indicators: ['mood', 'sleep', 'heartRate', 'systolic', 'diastolic', 'glucose']
+    },
+    distance: {
+      name: 'Distance from Earth', short: 'Distance',
+      summary: 'The farther from Earth, the longer the communication delay and the less real-time support, medical care and resupply.',
+      effect: 'Greater autonomy may add stress that affects mood and sleep. Limited care options make early self-monitoring of every indicator more important.',
+      indicators: ['mood', 'sleep']
+    },
+    gravity: {
+      name: 'Gravity fields', short: 'Gravity',
+      summary: 'Crews move between gravity fields: weightlessness in flight, partial gravity on the Moon or Mars, and full gravity on return to Earth.',
+      effect: 'Fluid shifts and reduced loading may affect blood pressure, heart rate and glucose handling, and may lead to bone and muscle loss without exercise.',
+      indicators: ['systolic', 'diastolic', 'heartRate', 'glucose']
+    },
+    environment: {
+      name: 'Hostile and closed environments', short: 'Closed environment',
+      summary: 'The spacecraft is a closed system. Air quality, CO₂, noise, lighting, temperature and microbes all need careful control.',
+      effect: 'Noise, light and CO₂ may affect sleep and mood, and shared air and surfaces may affect exposure to microbes, which can show in body temperature.',
+      indicators: ['sleep', 'mood', 'temperature', 'heartRate']
+    }
   },
 
   regions: {

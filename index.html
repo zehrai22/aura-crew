@@ -22,6 +22,7 @@
     <div class="topbar-meta">
       <span class="badge badge-synthetic" id="synthetic-badge" title="The history includes made-up demo entries from data.js">Synthetic demo data</span>
       <span class="badge badge-muted">Decision support only</span>
+      <a class="badge badge-link" href="#hazards">Hazards ↓</a>
     </div>
   </header>
 
@@ -96,6 +97,18 @@
       </form>
     </section>
   </main>
+
+  <!-- Hazards -->
+  <section class="hazards" id="hazards" aria-labelledby="hazards-title">
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="hazards-title">Spaceflight hazards</h2>
+        <span class="meta">Source: <a href="https://www.nasa.gov/hrp/hazards/" target="_blank" rel="noopener">NASA HRP · 5 Hazards of Human Spaceflight</a></span>
+      </div>
+      <p class="hazards-intro">NASA's Human Research Program groups spaceflight risks into five hazards. Each card lists the daily indicators the hazard <strong>may affect</strong>, with their latest status. These are possible influences, not certain cause and effect.</p>
+      <div class="hazard-grid" id="hazard-grid"></div>
+    </div>
+  </section>
 
   <!-- Region detail drawer -->
   <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
