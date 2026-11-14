@@ -983,24 +983,46 @@
     return el('section', null, [el('h3', { text: title })].concat(children));
   }
 
-  /** "heart rate below 45 bpm or above 110 bpm", "dizziness 3 (Severe)" — the red (attention) limit. */
-  function redLimitText(k) {
-    var spec = IND[k], y = spec.yellow, lim = spec.input;
-    if (!y) return '';
-    if (spec.redText) return spec.redText;
-    var name = /^[A-Z][a-z]+(\s|$)/.test(spec.short) ? spec.short.charAt(0).toLowerCase() + spec.short.slice(1) : spec.short;
-    if (spec.levels) {
-      var lv = Object.keys(spec.levels).map(Number).filter(function (v) { return v > y[1] || v < y[0]; });
-      return name + ' ' + lv.map(function (v) { return v + ' (' + spec.levels[v] + ')'; }).join(' or ');
-    }
-    var low = y[0] > lim.min, high = y[1] < lim.max;
-    if (low && high) return name + ' below ' + fmt(k, y[0]) + ' or above ' + withUnit(k, y[1]);
-    return name + (low ? ' below ' + withUnit(k, y[0]) : ' above ' + withUnit(k, y[1]));
+  /** Fill {key.hi} / {key.lo} / {key.loAbs} with the red ("attention") limits from config.js. */
+  function fillLimits(text) {
+    return text.replace(/\{(\w+)\.(hi|lo|loAbs)\}/g, function (m, k, which) {
+      var spec = IND[k];
+      if (!spec || !spec.yellow) return m;
+      var v = which === 'hi' ? spec.yellow[1] : spec.yellow[0];
+      if (which === 'loAbs') v = Math.abs(v);
+      return String(Number(Number(v).toFixed(spec.decimals)));   // 5.0 -> 5, 37.9 stays
+    });
   }
 
-  function joinOr(items) {
-    if (items.length < 2) return items.join('');
-    return items.slice(0, -1).join(', ') + ' or ' + items[items.length - 1];
+  /** One line, max ~12 words: what the current reading means for this system. */
+  function statusSummary(key, latest, s) {
+    if (!latest) return 'No check-in yet.';
+    var flags = REGIONS[key].indicators
+      .map(function (k) { return { k: k, st: evaluate(k, latest[k]) }; })
+      .filter(function (f) { return f.st === 'yellow' || f.st === 'red'; })
+      .sort(function (a, b) { return RANK[b.st] - RANK[a.st]; });
+    if (!flags.length) {
+      var tw = regionTrendWatch(key, currentTrends);
+      if (tw.length) return 'All within range; trend watch on ' + ((TW.indicators[tw[0]].name || IND[tw[0]].short).toLowerCase()) + '.';
+      return s === 'unknown' ? 'No readings for this system yet.' : 'All indicators are within range.';
+    }
+    var first = indicatorPhrase(flags[0].k, latest[flags[0].k]);
+    var more = flags.length > 1 ? ' and ' + (flags.length - 1) + ' more' : '';
+    var verb = flags.length > 1 ? ' need' : ' needs';
+    return first + more + verb + (s === 'red' ? ' attention.' : ' monitoring.');
+  }
+
+  /** The indicator charted first: red, then yellow, then trend watch, then the first with data. */
+  function focusIndicator(key, latest, history) {
+    var keys = REGIONS[key].indicators;
+    var pick = null;
+    ['red', 'yellow'].some(function (st) {
+      pick = keys.filter(function (k) { return latest && evaluate(k, latest[k]) === st; })[0] || null;
+      return !!pick;
+    });
+    if (!pick) pick = regionTrendWatch(key, currentTrends)[0] || null;
+    if (!pick) pick = keys.filter(function (k) { return history.some(function (e) { return measuredOn(e, k); }); })[0] || keys[0];
+    return pick;
   }
 
   /** Up to 2 actions: indicator-specific plan actions for flagged indicators first, then the system's own. */
@@ -1012,9 +1034,10 @@
         var flags = g.indicators.filter(function (k) { return REGIONS[key].indicators.indexOf(k) >= 0; })
           .map(function (k) { return evaluate(k, latest[k]); })
           .filter(function (st) { return st === 'yellow' || st === 'red'; });
-        return { g: g, st: worst(flags) };
+        var pos = Math.min.apply(null, g.indicators.map(function (k) { var i = REGIONS[key].indicators.indexOf(k); return i < 0 ? 99 : i; }));
+        return { g: g, st: worst(flags), pos: pos };
       }).filter(function (x) { return x.st === 'yellow' || x.st === 'red'; })
-        .sort(function (a, b) { return RANK[b.st] - RANK[a.st]; })
+        .sort(function (a, b) { return (RANK[b.st] - RANK[a.st]) || (a.pos - b.pos); })
         .forEach(function (x) { var t = x.g.actions[x.st]; if (t && out.indexOf(t) < 0) out.push(t); });
     }
     var own = (content.now && (content.now[s] || content.now.green)) || [];
@@ -1030,6 +1053,8 @@
       })));
   }
 
+  var drawerChartKey = null;
+
   function renderDrawer(key) {
     var history = getHistory();
     var latest = currentEntry(history);
@@ -1038,15 +1063,81 @@
     var s = regionStatus(key, latest);
     document.getElementById('drawer-title').textContent = region.name;
     var body = document.getElementById('drawer-body');
-    var scroll = body.scrollTop;
+    var prevMore = body.querySelector('details.more');
+    var keepOpen = !!(prevMore && prevMore.open && body.dataset.region === key);
+    body.dataset.region = key;
     body.innerHTML = '';
 
-    // (1) Status: chip, values, and one-line notes
-    body.appendChild(el('section', { class: 'drawer-status' }, [
+    // 1. Status chip + one-line summary
+    body.appendChild(el('section', { class: 'p-status' }, [
       el('span', { class: 'status-chip', 'data-status': s, text: CFG.statusText[s] }),
-      el('span', { class: 'meta', text: latest ? fmtDate(latest.date) + (latest.simulated ? ' · simulated' : '') : 'No check-in yet' })
+      el('span', { class: 'p-summary', text: statusSummary(key, latest, s) + (latest && latest.simulated ? ' (simulated)' : '') })
     ]));
-    if (latest && latest.simulated) body.appendChild(el('p', { class: 'sim-note', text: 'Simulation on: values include what-if offsets.' }));
+
+    // 2. What to do now
+    var al = el('ol', { class: 'now-list' });
+    nowActions(key, latest, s, content).forEach(function (t) { al.appendChild(el('li', { text: t })); });
+    body.appendChild(section('What to do now', [al]));
+
+    // 3. Contact your flight surgeon if
+    var tl = el('ul', { class: 'triggers' });
+    (content.contactIf || []).slice(0, 2).forEach(function (t) { tl.appendChild(el('li', { text: fillLimits(t) })); });
+    body.appendChild(el('section', { class: 'p-contact' + (s === 'red' ? ' is-red' : '') }, [
+      el('h3', { text: s === 'red' ? 'Contact your flight surgeon now. Also if:' : 'Contact your flight surgeon if:' }), tl
+    ]));
+
+    // 4. Trend chart: one indicator at a time, switchable
+    var recent = history.slice(-30);
+    var chartKeys = region.indicators.concat(region.extraCharts || []);
+    if (!drawerChartKey || chartKeys.indexOf(drawerChartKey) < 0) drawerChartKey = focusIndicator(key, latest, history);
+    var chartBox = el('div', { class: 'p-chart' });
+    var chips = el('div', { class: 'chart-chips', role: 'tablist', 'aria-label': 'Choose indicator' });
+    function showChart() {
+      chartBox.innerHTML = '';
+      chartBox.appendChild(trendChart(drawerChartKey, recent));
+      [].forEach.call(chips.children, function (c) {
+        var on = c.dataset.k === drawerChartKey;
+        c.setAttribute('aria-selected', String(on));
+        if (on) chips.scrollLeft = Math.max(0, c.offsetLeft - chips.offsetLeft - 8);   // keep the active chip visible
+      });
+    }
+    chartKeys.forEach(function (k) {
+      var st = latest ? evaluate(k, latest[k]) : 'unknown';
+      var c = el('button', { type: 'button', role: 'tab', class: 'chart-chip', 'data-k': k, 'data-status': st, text: IND[k].short });
+      c.addEventListener('click', function () { drawerChartKey = k; showChart(); });
+      chips.appendChild(c);
+    });
+    body.appendChild(el('section', { class: 'p-trend' }, [el('h3', { text: '30-day trend' }), chips, chartBox]));
+    showChart();
+
+    // 5. More details (closed by default)
+    var more = [el('summary', { text: 'More details' })];
+    if (content.what) more.push(el('h4', { text: 'What this system does' }), el('p', { text: content.what }));
+    if (content.research) more.push(el('h4', { text: 'Research shows' }), el('p', { text: content.research }));
+    if (content.measure) more.push(el('h4', { text: 'How to measure' }), el('p', { text: content.measure }));
+    if (content.performance) {
+      var testBtn = el('button', { type: 'button', class: 'btn btn-ghost', text: 'Run 2-minute cognitive check' });
+      testBtn.addEventListener('click', function () { openReactionTest(testBtn); });
+      more.push(el('p', { class: 'meta', text: content.performance.about }), testBtn);
+    }
+    // Notes: cognitive check, trend watch, BMI
+    var notes = [];
+    if (content.performance && latest) {
+      var perfStatus = worst(['perfReaction', 'perfMemory'].map(function (k) { return evaluate(k, latest[k]); }));
+      if (perfStatus === 'yellow' || perfStatus === 'red') { var pn = el('p'); performanceNote(pn, perfStatus, false); notes.push(pn); }
+      var lapStatus = evaluate('lapses', latest.lapses);
+      if (lapStatus === 'yellow' || lapStatus === 'red') notes.push(el('p', { class: 'alertness-note warn', text: content.alertness }));
+    }
+    regionTrendWatch(key, currentTrends).forEach(function (k) {
+      notes.push(el('p', { class: 'tw-note', text: '◇ Trend watch: ' + trendSentence(currentTrends[k]) + ' Early-warning signal, not a diagnosis.' }));
+    });
+    if (key === 'metabolism') {
+      var mb = massBaseline(history, latest);
+      var bmi = mb ? bmiFor(mb.latest.bodyMass) : null;
+      notes.push(el('p', { class: 'meta', text: bmi ? 'BMI ' + bmi + ' (reference only' + (profile.source === 'synthetic' ? ', synthetic height' : '') + ').' : 'Add your height in the profile to see BMI.' }));
+    }
+    if (notes.length) more.push(el('h4', { text: 'Notes' })), more.push.apply(more, notes);
+    // All readings
     var ul = el('ul', { class: 'readings compact' });
     region.indicators.forEach(function (k) {
       var v = latest ? latest[k] : null;
@@ -1054,90 +1145,19 @@
       var valNode = el('span', { class: 'r-val', text: fmt(k, v) });
       valNode.appendChild(el('small', { text: IND[k].unit }));
       ul.appendChild(el('li', { 'data-status': st }, [
-        el('span', { class: 'r-name', text: IND[k].short }),
-        valNode,
+        el('span', { class: 'r-name', text: IND[k].short }), valNode,
         el('span', { class: 'r-ref' }, [document.createTextNode('Ref ' + fmtRef(k)), trendTag(k)]),
         el('span', { class: 'r-delta', text: readingNote(latest, k) })
       ]));
     });
-    var statusKids = [ul];
-    if (content.performance && latest) {
-      var perfStatus = worst(['perfReaction', 'perfMemory'].map(function (k) { return evaluate(k, latest[k]); }));
-      if (perfStatus === 'yellow' || perfStatus === 'red') { var pn = el('p'); performanceNote(pn, perfStatus, false); statusKids.push(pn); }
-      var lapStatus = evaluate('lapses', latest.lapses);
-      if (lapStatus === 'yellow' || lapStatus === 'red') statusKids.push(el('p', { class: 'alertness-note warn', text: content.alertness }));
-    }
-    regionTrendWatch(key, currentTrends).forEach(function (k) {
-      statusKids.push(el('p', { class: 'tw-note', text: '◇ Trend watch: ' + trendSentence(currentTrends[k]) + ' ' + ((CONTENT.trendAdvice && CONTENT.trendAdvice[k]) || 'Consider reviewing your routine') + '. Early-warning signal, not a diagnosis.' }));
-    });
-    if (key === 'metabolism') {
-      var mb = massBaseline(history, latest);
-      var bmi = mb ? bmiFor(mb.latest.bodyMass) : null;
-      statusKids.push(el('p', { class: 'meta', text: bmi
-        ? 'BMI ' + bmi + ' (reference only' + (profile.source === 'synthetic' ? ', synthetic height' : '') + ').'
-        : 'Add your height in the check-in profile to see BMI (reference only).' }));
-    }
-    body.appendChild(el('section', null, statusKids));
-
-    // (2) What to do now
-    var acts = nowActions(key, latest, s, content);
-    var al = el('ol', { class: 'now-list' });
-    acts.forEach(function (t) { al.appendChild(el('li', { text: t })); });
-    body.appendChild(section('What to do now', [al]));
-
-    // (3) When to contact your flight surgeon
-    var contactKids = [];
-    if (s === 'red' && latest) {
-      var reds = region.indicators.filter(function (k) { return evaluate(k, latest[k]) === 'red'; })
-        .map(function (k) { return indicatorPhrase(k, latest[k]); });
-      contactKids.push(el('p', { class: 'alert', role: 'alert' }, [
-        el('strong', { text: 'Now: contact your flight surgeon. ' }),
-        el('span', { text: joinAnd(reds) + (reds.length === 1 ? ' is' : ' are') + ' outside the monitor range.' })
-      ]));
-    }
-    var triggers = el('ul', { class: 'triggers' });
-    var limits = (content.contactKeys || []).map(redLimitText).filter(Boolean);
-    if (limits.length) {
-      var cap = limits.map(function (t, i) { return i ? t : t.charAt(0).toUpperCase() + t.slice(1); });
-      triggers.appendChild(el('li', { text: cap.slice(0, -1).join('; ') + (cap.length > 1 ? '; or ' : '') + cap[cap.length - 1] + '.' }));
-    }
-    if (content.contact) triggers.appendChild(el('li', { text: content.contact }));
-    contactKids.push(triggers);
-    body.appendChild(section('When to contact your flight surgeon', contactKids));
-
-    // (4) 30-day trend
-    var recent = history.slice(-30);
-    var chartKeys = region.indicators.concat(region.extraCharts || []);
-    var charts = chartKeys.map(function (k) { return trendChart(k, recent); });
-    body.appendChild(section('30-day trend', charts.concat([dataTable(chartKeys, recent)])));
-
-    // (5) How to measure
-    var measureKids = [];
-    if (content.measure) {
-      var ol = el('ol', { class: 'steps' });
-      content.measure.slice(0, 3).forEach(function (t) { ol.appendChild(el('li', { text: t })); });
-      measureKids.push(ol);
-    }
-    if (content.performance) {
-      var testBtn = el('button', { type: 'button', class: 'btn btn-primary', text: 'Run 2-minute cognitive check' });
-      testBtn.addEventListener('click', function () { openReactionTest(testBtn); });
-      measureKids.push(el('p', { class: 'meta', text: content.performance.about }), testBtn);
-    }
-    body.appendChild(section('How to measure', measureKids));
-
-    // Possible contributing hazards (compact tags)
-    if (content.hazards) body.appendChild(hazardTags(content.hazards));
-
-    // (6) Why this may happen (collapsed, at most 2 short sentences)
-    if (content.why) {
-      body.appendChild(el('details', { class: 'why' }, [
-        el('summary', { text: 'Why this may happen' }),
-        el('p', { text: content.why })
-      ]));
-    }
+    more.push(el('h4', { text: 'All readings' }), ul);
+    if (content.hazards) more.push(hazardTags(content.hazards));
+    more.push(dataTable(chartKeys, recent));
+    var details = el('details', { class: 'more' }, more);
+    if (keepOpen) details.open = true;
+    body.appendChild(details);
 
     body.appendChild(el('p', { class: 'panel-disclaimer', text: DISCLAIMER }));
-    body.scrollTop = scroll;
   }
 
   /* ------------------------------------------------------------------ *
@@ -1282,6 +1302,7 @@
   }
 
   function openRegion(key, trigger) {
+    if (openKey !== key) drawerChartKey = null;
     openKey = key;
     lastTrigger = trigger || null;
     Object.keys(regionNodes).forEach(function (k) {

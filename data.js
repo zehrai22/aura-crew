@@ -245,27 +245,23 @@ window.AURA_CONTENT = {
     calories7d: 'Consider reviewing appetite, meal timing and food preferences'
   },
 
-  // Per body system:
-  //   now        : 2 short actions per status (used to fill "What to do now")
-  //   contactKeys: indicators whose red limits form the flight-surgeon trigger
-  //   contact    : one symptom-based trigger
-  //   measure    : 2–3 short steps
-  //   why        : at most 2 short sentences (collapsed)
-  //   hazards    : possible contributing hazards (tags)
+  // Per body system (every line is short: max 12 words for the main view):
+  //   now       : 2 actions per status (used to fill "What to do now")
+  //   contactIf : 1–2 flight-surgeon triggers. {key.hi} / {key.lo} / {key.loAbs}
+  //               are filled from the red ("attention") limits in config.js.
+  //   what, research, measure : "More details" text, max 2 short sentences each
+  //   hazards   : possible contributing hazards (tags in "More details")
   regions: {
     nervous: {
       now: {
         green: ['Keep your usual sleep window.', 'Keep doing the daily balance and vision self-checks.'],
         yellow: ['Consider a 7–9 h sleep window tonight.', 'Consider repeating the cognitive check tomorrow.'],
-        red: ['Consider stopping tasks that need balance, clear vision or fast reactions.', 'Tell a crewmate how you feel.']
+        red: ['Consider stopping tasks that need balance, vision or fast reactions.', 'Tell a crewmate how you feel.']
       },
-      contactKeys: ['dizziness', 'visionChange', 'perfReaction', 'perfMemory'],
-      contact: 'You have a sudden severe headache, confusion or loss of vision.',
-      measure: [
-        'Rate sleep, mood, dizziness and vision right after waking.',
-        'Run the 2-minute cognitive check at the same time each day, braced with a foot restraint.'
-      ],
-      why: 'Gravity changes may affect balance and vision. Isolation, noise and short sleep may lower mood and alertness.',
+      contactIf: ['Severe dizziness (3) or a noticeable vision change (2).', 'Reaction or memory more than {perfMemory.loAbs}% below your baseline.'],
+      what: 'The brain, nerves and inner ear control attention, mood, sleep, balance and vision.',
+      research: 'NASA lists balance problems and eye changes (SANS) among spaceflight risks. Short sleep may slow reactions.',
+      measure: 'Rate sleep, mood, dizziness and vision after waking. Run the 2-minute cognitive check daily, braced with a foot restraint.',
       hazards: ['gravity', 'isolation', 'environment', 'distance', 'radiation'],
       alertness: 'Low alertness can signal fatigue; consider rest and contact your flight surgeon.',
       performance: {
@@ -280,14 +276,10 @@ window.AURA_CONTENT = {
         yellow: ['Consider repeating the reading after 5 minutes of rest.', 'Consider less caffeine and a lighter workload today.'],
         red: ['Consider resting and repeating the reading now.', 'Consider avoiding strenuous activity until reviewed.']
       },
-      contactKeys: ['systolic', 'diastolic', 'heartRate'],
-      contact: 'You have chest pain, fainting or a racing heartbeat at rest.',
-      measure: [
-        'Rest 5 minutes; no caffeine or exercise for 30 minutes before.',
-        'Anchor your feet and support your arm at heart level.',
-        'Take two readings 1 minute apart and log the average.'
-      ],
-      why: 'Without gravity, fluids shift toward the head and the heart may decondition. Stress and workload may raise blood pressure.',
+      contactIf: ['BP above {systolic.hi}/{diastolic.hi} or below {systolic.lo}/{diastolic.lo}; pulse outside {heartRate.lo}–{heartRate.hi}.', 'Chest pain, fainting or a racing heartbeat at rest.'],
+      what: 'The heart and blood vessels move blood and keep blood pressure stable.',
+      research: 'Without gravity, fluids shift toward the head and the heart may decondition. Stress may raise blood pressure.',
+      measure: 'Rest 5 minutes with your arm supported at heart level. Take two readings and log the average.',
       hazards: ['gravity', 'isolation', 'environment', 'radiation']
     },
     respiratory: {
@@ -296,14 +288,10 @@ window.AURA_CONTENT = {
         yellow: ['Consider re-checking after 10 minutes of rest.', 'Consider moving to a better-ventilated module.'],
         red: ['Consider stopping exertion and moving to a well-ventilated area.', 'Tell the crew and follow air quality procedures.']
       },
-      contactKeys: ['spo2', 'respRate', 'cabinCO2'],
-      contact: 'You are short of breath, confused or have a severe headache.',
-      measure: [
-        'Sit still 2 minutes, then read SpO₂ on a warm fingertip.',
-        'Count breaths for 60 seconds at rest.',
-        'Optional: note cabin CO₂ from the module display.'
-      ],
-      why: 'Cabins and spacesuits depend on life support, so oxygen may drop or CO₂ may build up. NASA lists hypoxia, including low oxygen and high CO₂ on spacewalks, among spaceflight risks.',
+      contactIf: ['SpO₂ below {spo2.lo}% or breathing outside {respRate.lo}–{respRate.hi}/min.', 'Cabin CO₂ above {cabinCO2.hi} ppm, or you feel short of breath.'],
+      what: 'The lungs bring oxygen into the blood and remove carbon dioxide.',
+      research: 'NASA lists hypoxia, including low oxygen and high CO₂ on spacewalks, among spaceflight risks. Cabin CO₂ is often higher than on Earth.',
+      measure: 'Sit still 2 minutes, then read SpO₂ on a warm fingertip. Count breaths for 60 seconds at rest.',
       hazards: ['environment', 'distance', 'gravity']
     },
     renal: {
@@ -312,59 +300,46 @@ window.AURA_CONTENT = {
         yellow: ['Consider drinking an extra 0.5–1 L today.', 'Consider checking urine color again tomorrow morning.'],
         red: ['Consider increasing fluids now, as your plan allows.', 'Consider sharing your fluid log with the medical team.']
       },
-      contactKeys: ['fluidIntake', 'urineColor', 'urinaryCalcium'],
-      contact: 'You have flank or back pain, blood in urine or pain when urinating.',
-      measure: [
-        'Add up drink bags and rehydrated food for the day, in liters.',
-        'Compare first-morning urine with the color card (1 = pale, 5 = amber).'
-      ],
-      why: 'Urinary calcium rises in flight as bone is unloaded, which may raise kidney stone risk on long missions. Drinking enough is a common countermeasure.',
+      contactIf: ['Dark urine (4–5), fluids below {fluidIntake.lo} L, or calcium above +{urinaryCalcium.hi}%.', 'Flank pain, blood in urine or pain when urinating.'],
+      what: 'The kidneys balance fluids and minerals and remove waste as urine.',
+      research: 'Urinary calcium rises in flight, which may raise kidney stone risk on long missions. Drinking enough is a common countermeasure.',
+      measure: 'Add up the liters you drank today. Compare first-morning urine with the color card.',
       hazards: ['gravity', 'distance', 'environment']
     },
     immune: {
       now: {
         green: ['Keep up hand hygiene and surface cleaning.', 'Keep a regular sleep schedule.'],
         yellow: ['Consider re-checking temperature in 4–6 hours.', 'Consider extra rest and fluids today.'],
-        red: ['Consider limiting close contact per crew protocol.', 'Consider resting and logging your symptoms.']
+        red: ['Consider re-checking temperature within 2 hours.', 'Consider resting and logging your symptoms.']
       },
-      contactKeys: ['temperature', 'sleep'],
-      contact: 'You have fever with chills, a new rash, or feel unwell for more than a day.',
-      measure: [
-        'Same thermometer, same body site, each morning before exercise.',
-        'Log sleep hours right after waking.'
-      ],
-      why: 'Shared air and surfaces may spread microbes. Stress and short sleep may weaken immune responses.',
+      contactIf: ['Temperature above {temperature.hi} °C or below {temperature.lo} °C.', 'Fever with chills, a new rash, or unwell for over a day.'],
+      what: 'The immune system defends against infection and helps repair tissue.',
+      research: 'Shared air and surfaces may spread microbes. Stress and short sleep may weaken immune responses.',
+      measure: 'Use the same thermometer and body site each morning. Log sleep hours right after waking.',
       hazards: ['environment', 'isolation', 'gravity', 'radiation', 'distance']
     },
     metabolism: {
       now: {
         green: ['Keep to your meal plan.', 'Keep your exercise schedule.'],
         yellow: ['Consider adding planned snacks today.', 'Consider logging all meals for 3 days.'],
-        red: ['Consider re-checking glucose now with a fresh strip.', 'Consider sharing your food log and body mass with the medical team.']
+        red: ['Consider re-checking glucose now with a fresh strip.', 'Consider sharing your food log with the medical team.']
       },
-      contactKeys: ['glucose', 'massChange7d', 'calories7d'],
-      contact: 'You feel shaky, confused or very weak.',
-      measure: [
-        'Fasting glucose in the morning; touch the strip to the drop.',
-        'Body mass on the mass-measurement device, same clothing, before breakfast.',
-        'Add up the kcal on the food packages you ate today.'
-      ],
-      why: 'Packaged food and stress may reduce appetite; NASA lists inadequate food and nutrition among spaceflight risks. In microgravity, body mass is measured with a special device, not a scale.',
+      contactIf: ['Glucose below {glucose.lo} or above {glucose.hi} mg/dL.', 'Body mass down over {massChange7d.loAbs}% in 7 days, or feeling very weak.'],
+      what: 'Metabolism turns food into energy and keeps blood sugar and body mass stable.',
+      research: 'NASA lists inadequate food and nutrition among spaceflight risks. In microgravity, body mass is measured with a special device, not a scale.',
+      measure: 'Measure fasting glucose before breakfast. Log body mass on scheduled days and the kcal you ate.',
       hazards: ['environment', 'distance', 'gravity', 'isolation']
     },
     musculoskeletal: {
       now: {
         green: ['Keep your daily resistive and aerobic exercise.', 'Keep calcium and vitamin D as prescribed.'],
         yellow: ['Consider making up missed resistive sessions this week.', 'Consider reviewing your schedule with your fitness team.'],
-        red: ['Consider sharing your exercise log with your medical officer.', 'Consider not catching up with one maximal session.']
+        red: ['Consider sharing your exercise log with your medical officer.', 'Consider avoiding one maximal catch-up session.']
       },
-      contactKeys: ['resistive7d', 'aerobic7d', 'boneResorption'],
-      contact: 'You have new bone or joint pain, or an injury.',
-      measure: [
-        'Log minutes under load for resistive and aerobic exercise.',
-        'Enter bone markers only when the medical team shares a new result.'
-      ],
-      why: 'Unloaded bones release calcium, so urinary calcium and bone breakdown markers may rise. Exercise reduces but does not fully prevent bone and muscle loss.',
+      contactIf: ['Resistive under {resistive7d.lo} or aerobic under {aerobic7d.lo} minutes per week.', 'New bone or joint pain, or an injury.'],
+      what: 'Bones support the body and store calcium; muscles give strength and posture.',
+      research: 'Unloaded bones release calcium, so bone breakdown markers may rise. Exercise reduces but does not fully prevent loss.',
+      measure: 'Log minutes under load for resistive and aerobic exercise. Enter bone markers only when the medical team shares results.',
       hazards: ['gravity', 'environment', 'distance', 'radiation']
     }
   }
