@@ -15,7 +15,10 @@
  *   signed          : show a "+" sign for positive values
  *   levels          : names for each value of a self-rated scale
  *   derived.agg     : 'sum' (default) or 'avg' over the window;
- *   derived.type    : 'pctChange' = % change versus the value `days` earlier
+ *   derived.type    : 'pctChange' = % change versus the value `days` earlier;
+ *                     'baseline'  = performance of the recent tests versus the
+ *                     astronaut's own baseline (see `cognitive`)
+ *   refText         : custom wording for the reference shown next to a value
  *
  * These values are decision-support placeholders, not clinical criteria.
  */
@@ -168,18 +171,67 @@ window.AURA_CONFIG = {
       input: { min: 0, max: 2, step: 1 }
     },
 
-    // --- Alertness: 1-minute reaction self-test (inspired by the ISS PVT) ---
-    // ASSUMPTION - general adult reference ranges, to be reviewed against NASA HRP sources
+    // --- Cognitive check: 1-minute reaction self-test (inspired by the ISS PVT)
+    //     plus a 1-minute working-memory digit test. Raw results are charted;
+    //     status compares them with the astronaut's OWN baseline (below). ---
     reactionMedian: {
       label: 'Reaction time (median)',
       short: 'Reaction time',
       unit: 'ms',
       decimals: 0,
-      green: [100, 320],
-      yellow: [100, 400],
+      inputOnly: true,
       optional: true,
       input: { min: 100, max: 3000, step: 1 }
     },
+    memAccuracy: {
+      label: 'Working memory accuracy',
+      short: 'Memory accuracy',
+      unit: '%',
+      decimals: 0,
+      inputOnly: true,
+      optional: true,
+      input: { min: 0, max: 100, step: 1 }
+    },
+    memSpan: {
+      label: 'Longest correct digit sequence',
+      short: 'Longest sequence',
+      unit: 'digits',
+      decimals: 0,
+      inputOnly: true,
+      optional: true,
+      input: { min: 0, max: 20, step: 1 }
+    },
+    // ASSUMPTION - personal-baseline thresholds, to be reviewed against NASA HRP sources.
+    // Value = % change of the average of the last 3 tests versus the average of the
+    // first 3 completed tests (negative = below baseline). A drop of more than 15%
+    // is "monitor", more than 30% is "attention".
+    perfReaction: {
+      label: 'Reaction speed vs own baseline',
+      short: 'Reaction vs baseline',
+      unit: '%',
+      decimals: 0,
+      signed: true,
+      green: [-15, 100],
+      yellow: [-30, 100],
+      refText: 'within 15% of baseline',
+      // Reaction time: lower is better, so a slower time counts as a drop.
+      derived: { type: 'baseline', from: ['reactionMedian'], better: 'lower' },
+      input: { min: -100, max: 100, step: 1 }
+    },
+    perfMemory: {
+      label: 'Working memory vs own baseline',
+      short: 'Memory vs baseline',
+      unit: '%',
+      decimals: 0,
+      signed: true,
+      green: [-15, 100],
+      yellow: [-30, 100],
+      refText: 'within 15% of baseline',
+      // Uses the larger drop of accuracy and longest correct sequence.
+      derived: { type: 'baseline', from: ['memAccuracy', 'memSpan'], better: 'higher' },
+      input: { min: -100, max: 100, step: 1 }
+    },
+    // ASSUMPTION - general adult reference ranges, to be reviewed against NASA HRP sources
     lapses: {
       label: 'Attention lapses (> 500 ms)',
       short: 'Lapses',
@@ -319,7 +371,7 @@ window.AURA_CONFIG = {
 
   // Order of indicators on the dashboard, in the score and on the check-in form.
   dashboardIndicators: [
-    'mood', 'sleep', 'reactionMedian', 'lapses', 'dizziness', 'visionChange',
+    'mood', 'sleep', 'perfReaction', 'perfMemory', 'lapses', 'dizziness', 'visionChange',
     'systolic', 'diastolic', 'heartRate',
     'spo2', 'respRate', 'cabinCO2',
     'fluidIntake', 'urineColor', 'urinaryCalcium',
@@ -331,7 +383,7 @@ window.AURA_CONFIG = {
     'systolic', 'diastolic', 'heartRate', 'spo2', 'respRate', 'cabinCO2',
     'glucose', 'temperature', 'sleep', 'mood', 'dizziness', 'visionChange',
     'fluidIntake', 'urineColor', 'resistiveMin', 'aerobicMin',
-    'urinaryCalcium', 'boneResorption', 'reactionMedian', 'lapses',
+    'urinaryCalcium', 'boneResorption', 'reactionMedian', 'lapses', 'memAccuracy', 'memSpan',
     'bodyMass', 'calories'
   ],
 
@@ -361,6 +413,10 @@ window.AURA_CONFIG = {
       sleep: { worse: 'down', step: 0.7 },
       mood: { worse: 'down', step: 0.8 },
       reactionMedian: { worse: 'up', step: 25 },
+      perfReaction: { worse: 'down', step: 8, name: 'Reaction speed versus your baseline' },
+      perfMemory: { worse: 'down', step: 8, name: 'Working memory versus your baseline' },
+      memAccuracy: { worse: 'down', step: 10 },
+      memSpan: { worse: 'down', step: 1 },
       lapses: { worse: 'up', step: 1.5 },
       fluidIntake: { worse: 'down', step: 0.3 },
       urinaryCalcium: { worse: 'up', step: 10 },
@@ -384,13 +440,33 @@ window.AURA_CONFIG = {
     minResponses: 5       // fewer valid responses: result is not used
   },
 
+  // ASSUMPTION - cognitive check settings, to be reviewed against NASA HRP sources.
+  // A performance check compared with the astronaut's own baseline, not an IQ test
+  // and not a validated clinical test.
+  cognitive: {
+    baselineTests: 3,     // baseline = average of the first 3 completed tests
+    recentTests: 3,       // compared with the average of the last 3 tests
+    carryForwardDays: 7,  // days a result still counts for status without a new test
+    memory: {
+      durationSec: 60,
+      startLength: 3,     // digits in the first sequence
+      minLength: 3,
+      maxLength: 12,
+      digitMs: 700,       // each digit is shown for this long
+      gapMs: 250,         // blank gap between digits
+      minTrials: 3        // fewer completed sequences: result is not used
+    }
+  },
+
   // ASSUMPTION - mapping of indicators to body systems is a simplified proxy,
   // to be reviewed against NASA HRP sources. A region's status is the worst
   // status among the indicators it depends on.
   regions: {
     nervous: {
       name: 'Nervous system',
-      indicators: ['mood', 'sleep', 'reactionMedian', 'lapses', 'dizziness', 'visionChange']
+      indicators: ['mood', 'sleep', 'perfReaction', 'perfMemory', 'lapses', 'dizziness', 'visionChange'],
+      // Raw cognitive-check results, charted for context
+      extraCharts: ['reactionMedian', 'memAccuracy', 'memSpan']
     },
     heart: {
       name: 'Cardiovascular',
@@ -444,13 +520,13 @@ window.AURA_CONFIG = {
       label: 'Sleep deficit',
       detail: 'About 2.5 h less sleep than usual',
       hazard: 'environment',
-      deltas: { sleep: -2.5, mood: -1, reactionMedian: 45, lapses: 2, heartRate: 5, glucose: 8, systolic: 4 }
+      deltas: { sleep: -2.5, mood: -1, reactionMedian: 45, perfReaction: -14, perfMemory: -12, lapses: 2, heartRate: 5, glucose: 8, systolic: 4 }
     },
     radiationEvent: {
       label: 'Radiation event',
       detail: 'Solar particle event, crew sheltering in place',
       hazard: 'radiation',
-      deltas: { sleep: -1.5, mood: -1, reactionMedian: 20, lapses: 1, heartRate: 4, temperature: 0.3, cabinCO2: 1200 }
+      deltas: { sleep: -1.5, mood: -1, reactionMedian: 20, perfReaction: -6, perfMemory: -5, lapses: 1, heartRate: 4, temperature: 0.3, cabinCO2: 1200 }
     },
     evaDay: {
       label: 'Spacewalk day',

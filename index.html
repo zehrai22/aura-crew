@@ -192,14 +192,16 @@
           <p class="field-note">From periodic urine or blood samples, not measured daily. Leave blank unless your medical team shared a new result. Urinary calcium is used by both bones & muscle and urinary & renal.</p>
         </fieldset>
         <fieldset class="field-wide alertness-field">
-          <legend>Alertness <em>optional · 1-minute reaction test</em></legend>
+          <legend>Cognitive check <em>optional · reaction + memory, 2 min</em></legend>
           <div class="rt-row">
-            <button type="button" class="btn btn-ghost" id="rt-open">Run reaction test</button>
+            <button type="button" class="btn btn-ghost" id="rt-open">Run cognitive check</button>
             <span class="rt-summary" id="rt-summary">Not tested yet</span>
             <button type="button" class="link-btn" id="rt-clear" hidden>Clear</button>
           </div>
           <input type="hidden" name="reactionMedian">
           <input type="hidden" name="lapses">
+          <input type="hidden" name="memAccuracy">
+          <input type="hidden" name="memSpan">
         </fieldset>
         <p class="form-error" id="form-error" role="alert" hidden></p>
         <div class="form-actions">
@@ -241,16 +243,17 @@
     <div class="rt-dialog" role="dialog" aria-modal="true" aria-labelledby="rt-title">
       <div class="drawer-head">
         <div>
-          <p class="eyebrow">Alertness</p>
-          <h2 id="rt-title">Reaction self-test</h2>
+          <p class="eyebrow">Nervous system · performance check</p>
+          <h2 id="rt-title">Cognitive check</h2>
         </div>
-        <button class="icon-btn" id="rt-close" aria-label="Close reaction test">&times;</button>
+        <button class="icon-btn" id="rt-close" aria-label="Close cognitive check">&times;</button>
       </div>
       <div class="rt-body">
         <div id="rt-intro">
-          <p>Inspired by the psychomotor vigilance test (PVT) used on the ISS. For <strong>1 minute</strong>, tap the circle or press <kbd>Space</kbd> as soon as it lights up. The wait between lights is random, so don't anticipate.</p>
-          <p class="meta">Not a validated clinical test. Run it at the same time each day, in a quiet spot. In microgravity, brace yourself with a foot restraint and hold the device steady.</p>
-          <button type="button" class="btn btn-primary" id="rt-start">Start · 1 minute</button>
+          <p>Two short parts, about 2 minutes in total. Results are compared with <strong>your own baseline</strong> (the average of your first 3 completed checks), not with population norms.</p>
+          <p><strong>Part 1 · Reaction (1 min).</strong> Inspired by the psychomotor vigilance test (PVT) used on the ISS. Tap the circle or press <kbd>Space</kbd> as soon as it lights up. The wait is random, so don't anticipate.</p>
+          <p class="meta">This is a performance check, not an IQ test and not a validated clinical test. Run it at the same time each day, in a quiet spot. In microgravity, brace yourself with a foot restraint and hold the device steady.</p>
+          <button type="button" class="btn btn-primary" id="rt-start">Start part 1 · 1 minute</button>
         </div>
         <div id="rt-run" hidden>
           <div class="rt-progress" aria-hidden="true"><span id="rt-bar"></span></div>
@@ -263,8 +266,32 @@
           <div class="rt-stats" id="rt-stats"></div>
           <p class="alertness-note" id="rt-advice"></p>
           <div class="form-actions">
-            <button type="button" class="btn btn-primary" id="rt-use">Add to check-in</button>
+            <button type="button" class="btn btn-primary" id="rt-next">Continue to part 2 · memory</button>
+            <button type="button" class="btn btn-ghost" id="rt-use">Add reaction only</button>
             <button type="button" class="btn btn-ghost" id="rt-again">Run again</button>
+          </div>
+        </div>
+        <div id="mem-intro" hidden>
+          <p><strong>Part 2 · Working memory (1 min).</strong> Digits appear one at a time. When you see <strong>?</strong>, type them back in the same order and press Enter. Get one right and the next sequence is one digit longer; miss one and it gets one shorter.</p>
+          <p class="meta">Records your accuracy and your longest correct sequence. A performance check, not an IQ test.</p>
+          <button type="button" class="btn btn-primary" id="mem-start">Start part 2 · 1 minute</button>
+        </div>
+        <div id="mem-run" hidden>
+          <div class="rt-progress" aria-hidden="true"><span id="mem-bar"></span></div>
+          <div class="mem-display" id="mem-display" aria-live="assertive" aria-atomic="true"></div>
+          <p class="meta mem-feedback" id="mem-feedback" aria-live="polite">—</p>
+          <form id="mem-form" class="mem-form" hidden autocomplete="off">
+            <input type="text" id="mem-input" inputmode="numeric" pattern="[0-9 ]*" maxlength="30" aria-label="Type the digits in order" autocomplete="off">
+            <button type="submit" class="btn btn-primary">Enter</button>
+          </form>
+          <p class="meta rt-status" id="mem-status" aria-live="off">—</p>
+        </div>
+        <div id="cog-result" hidden>
+          <div class="rt-stats" id="cog-stats"></div>
+          <p class="alertness-note" id="cog-advice"></p>
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary" id="cog-use">Add to check-in</button>
+            <button type="button" class="btn btn-ghost" id="cog-again">Run again</button>
           </div>
         </div>
       </div>

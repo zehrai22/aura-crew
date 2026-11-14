@@ -47,6 +47,7 @@
    */
   function enrich(raw) {
     var lastSeen = {};
+    var tests = {};
     var out = raw.map(function (r) {
       var e = {};
       Object.keys(r).forEach(function (k) { e[k] = r[k]; });
@@ -56,7 +57,23 @@
     out.forEach(function (e, i) {
       Object.keys(IND).forEach(function (k) {
         var spec = IND[k];
-        if (spec.derived && spec.derived.type === 'pctChange') {
+        if (spec.derived && spec.derived.type === 'baseline') {
+          var vals = spec.derived.from.map(function (f) { return raw[i][f]; });
+          var has = vals.every(function (v) { return typeof v === 'number' && !isNaN(v); });
+          tests[k] = tests[k] || [];
+          if (has) tests[k].push(vals);
+          e._tests = e._tests || {};
+          e._tests[k] = tests[k].length;
+          if (has && tests[k].length >= CFG.cognitive.baselineTests) {
+            e[k] = perfVsBaseline(tests[k], spec.derived);
+            lastSeen[k] = { value: e[k], date: e.date };
+          } else if (!has && lastSeen[k] && dayDiff(lastSeen[k].date, e.date) <= CFG.cognitive.carryForwardDays) {
+            e[k] = lastSeen[k].value;            // no test today: reuse the latest comparison
+            e._asof[k] = lastSeen[k].date;
+          } else {
+            e[k] = null;
+          }
+        } else if (spec.derived && spec.derived.type === 'pctChange') {
           e[k] = pctChange(raw, out, i, spec.derived);
           if (e[k] == null && lastSeen[k] && dayDiff(lastSeen[k].date, e.date) < spec.derived.days) {
             e[k] = lastSeen[k].value;            // not measured today: reuse the latest change
@@ -101,6 +118,26 @@
       if (gap >= d.days && typeof ref === 'number' && ref > 0) return Math.round((now - ref) / ref * 1000) / 10;
     }
     return null;
+  }
+
+  /**
+   * Performance of the last `recentTests` tests versus the astronaut's own
+   * baseline (average of the first `baselineTests` tests), in %.
+   * Negative = below baseline. For several metrics the largest drop is used.
+   * `tests` is a list of [metric1, metric2, ...] in chronological order.
+   */
+  function perfVsBaseline(tests, d) {
+    var C = CFG.cognitive;
+    if (tests.length < C.baselineTests) return null;
+    function avg(list, m) { return list.reduce(function (a, t) { return a + t[m]; }, 0) / list.length; }
+    var base = tests.slice(0, C.baselineTests), recent = tests.slice(-C.recentTests);
+    var changes = d.from.map(function (f, m) {
+      var b = avg(base, m), r = avg(recent, m);
+      if (!b) return 0;
+      var pct = (r - b) / b * 100;
+      return d.better === 'lower' ? -pct : pct;
+    });
+    return Math.round(Math.min.apply(null, changes));
   }
 
   /** First recorded body mass and the latest change versus it (for context only). */
@@ -236,6 +273,7 @@
   /** Reference text for the "within range" band, using ≥ / ≤ for open-ended ranges. */
   function fmtRef(key) {
     var spec = IND[key], g = spec.green, lim = spec.input;
+    if (spec.refText) return spec.refText;
     if (!g) return spec.targetLine ? 'target ' + spec.targetLine + ' ' + spec.unit : 'no reference range';
     if (g[0] === g[1]) return fmt(key, g[0]) + (spec.levels && spec.levels[g[0]] ? ' (' + spec.levels[g[0]] + ')' : '');
     if (g[1] >= lim.max) return '≥ ' + fmt(key, g[0]);
@@ -250,6 +288,15 @@
   function readingNote(entry, k) {
     var spec = IND[k];
     if (!entry) return '';
+    if (spec.derived && spec.derived.type === 'baseline') {
+      var n = entry._tests ? entry._tests[k] || 0 : 0;
+      if (entry[k] == null) return n < CFG.cognitive.baselineTests ? 'Baseline: ' + n + ' of ' + CFG.cognitive.baselineTests + ' tests' : 'No recent test';
+      var raw = spec.derived.from.map(function (f) { return entry[f]; });
+      var latestText = k === 'perfReaction' ? (raw[0] != null ? 'Latest ' + raw[0] + ' ms' : '')
+        : (raw[1] != null ? 'Latest ' + raw[1] + ' digits · ' + raw[0] + '%' : '');
+      if (entry._asof && entry._asof[k]) return 'Tested ' + shortDate(entry._asof[k]);
+      return latestText || 'Last 3 vs first 3 tests';
+    }
     if (spec.derived && spec.derived.type === 'pctChange') {
       var mb = massBaseline(getHistory(), entry);
       if (entry[k] == null) return mb ? 'Needs 2 readings 7+ days apart' : 'Not measured yet';
@@ -1039,14 +1086,22 @@
 
     // Alertness: reaction self-test (nervous system)
     if (content.alertness) {
-      var alertStatus = worst(['reactionMedian', 'lapses'].map(function (k) { return evaluate(k, latest ? latest[k] : null); }));
-      var testBtn = el('button', { type: 'button', class: 'btn btn-primary', text: 'Run 1-minute reaction test' });
+      var perfStatus = worst(['perfReaction', 'perfMemory'].map(function (k) { return evaluate(k, latest ? latest[k] : null); }));
+      var lapStatus = evaluate('lapses', latest ? latest.lapses : null);
+      var testBtn = el('button', { type: 'button', class: 'btn btn-primary', text: 'Run 2-minute cognitive check' });
       testBtn.addEventListener('click', function () { openReactionTest(testBtn); });
-      body.appendChild(section('Alertness', [
-        el('p', { class: 'alertness-note' + (alertStatus === 'yellow' || alertStatus === 'red' ? ' warn' : ''), text: content.alertness }),
-        el('p', { class: 'meta', text: 'Tap when the circle lights up. Records median reaction time and lapses (responses over ' + CFG.reactionTest.lapseMs + ' ms) into the check-in form.' }),
+      var notes = [];
+      if (perfStatus === 'yellow' || perfStatus === 'red') {
+        var pn = el('p'); performanceNote(pn, perfStatus, false); notes.push(pn);
+      }
+      if (lapStatus === 'yellow' || lapStatus === 'red') {
+        notes.push(el('p', { class: 'alertness-note warn', text: content.alertness }));
+      }
+      if (!notes.length) notes.push(el('p', { class: 'alertness-note', text: content.alertness }));
+      body.appendChild(section('Cognitive check', notes.concat([
+        el('p', { class: 'meta', text: (content.performance && content.performance.about) + ' Part 1: tap when the circle lights up (median reaction time and lapses over ' + CFG.reactionTest.lapseMs + ' ms). Part 2: type back digit sequences that get longer (accuracy and longest correct sequence). Both are compared with the average of your first ' + CFG.cognitive.baselineTests + ' completed checks.' }),
         testBtn
-      ]));
+      ])));
     }
 
     // What it does
@@ -1361,8 +1416,10 @@
 
   function updateReactionSummary() {
     var med = form.elements.reactionMedian.value, lap = form.elements.lapses.value;
+    var acc = form.elements.memAccuracy.value, span = form.elements.memSpan.value;
     var summary = document.getElementById('rt-summary');
     var has = med !== '' && lap !== '';
+    var hasMem = acc !== '' && span !== '';
     summary.innerHTML = '';
     if (!has) {
       summary.textContent = 'Not tested yet';
@@ -1375,7 +1432,10 @@
         summary.appendChild(span);
       });
     }
-    document.getElementById('rt-clear').hidden = !has;
+    if (hasMem) {
+      summary.appendChild(document.createTextNode(' · Memory ' + acc + '%, longest ' + span + ' digits'));
+    }
+    document.getElementById('rt-clear').hidden = !has && !hasMem;
   }
 
   function setupProfile() {
@@ -1405,6 +1465,8 @@
   document.getElementById('rt-clear').addEventListener('click', function () {
     form.elements.reactionMedian.value = '';
     form.elements.lapses.value = '';
+    form.elements.memAccuracy.value = '';
+    form.elements.memSpan.value = '';
     updateReactionSummary();
   });
 
@@ -1470,8 +1532,51 @@
   var rtResult = null;      // last completed result
   var rtTrigger = null;
 
+  var COG_STEPS = ['rt-intro', 'rt-run', 'rt-result', 'mem-intro', 'mem-run', 'cog-result'];
   function rtShow(step) {
-    ['rt-intro', 'rt-run', 'rt-result'].forEach(function (id) { document.getElementById(id).hidden = id !== step; });
+    COG_STEPS.forEach(function (id) { document.getElementById(id).hidden = id !== step; });
+  }
+
+  /**
+   * What a new test result would mean against the personal baseline:
+   * recorded tests (excluding the form's date, which the new entry replaces) + this one.
+   */
+  function projectedPerf(k, newVals) {
+    var spec = IND[k], d = spec.derived, date = form.elements.date.value;
+    var tests = [];
+    getHistory().forEach(function (e) {
+      if (e.date === date) return;
+      var vals = d.from.map(function (f) { return e[f]; });
+      if (vals.every(function (v) { return typeof v === 'number' && !isNaN(v); })) tests.push(vals);
+    });
+    tests.push(d.from.map(function (f) { return newVals[f]; }));
+    return { value: perfVsBaseline(tests, d), count: tests.length };
+  }
+
+  function perfText(k, p) {
+    if (p.value == null) return 'Building baseline: ' + p.count + ' of ' + CFG.cognitive.baselineTests;
+    return fmt(k, p.value) + '% vs baseline';
+  }
+
+  function statTile(box, label, value, st) {
+    box.appendChild(el('div', { class: 'stat', 'data-status': st || 'unknown' }, [
+      el('span', { class: 'stat-label', text: label }),
+      el('span', { class: 'stat-val', text: value })
+    ]));
+  }
+
+  /** Yellow/red performance note, or a neutral line when within the baseline range. */
+  function performanceNote(node, status, building) {
+    var perf = (CONTENT.regions.nervous && CONTENT.regions.nervous.performance) || {};
+    if (status === 'red' || status === 'yellow') {
+      node.className = 'alertness-note ' + (status === 'red' ? 'danger' : 'warn');
+      node.textContent = perf[status];
+    } else {
+      node.className = 'alertness-note';
+      node.textContent = building
+        ? 'Your first ' + CFG.cognitive.baselineTests + ' completed checks set your personal baseline. Results are compared with it, not with population norms.'
+        : 'Within 15% of your own baseline. Compare with your trend over the coming days.';
+    }
   }
 
   function openReactionTest(trigger) {
@@ -1486,6 +1591,7 @@
   function closeReactionTest() {
     if (rtOverlay.hidden) return false;
     stopTest();
+    stopMem();
     rtOverlay.classList.remove('open');
     rtOverlay.hidden = true;
     if (rtTrigger && rtTrigger.focus) rtTrigger.focus({ preventScroll: true });
@@ -1585,34 +1691,157 @@
 
     var stats = document.getElementById('rt-stats');
     stats.innerHTML = '';
-    function stat(label, value, st) {
-      stats.appendChild(el('div', { class: 'stat', 'data-status': st || 'unknown' }, [
-        el('span', { class: 'stat-label', text: label }),
-        el('span', { class: 'stat-val', text: value })
-      ]));
-    }
-    var medStatus = rtResult ? evaluate('reactionMedian', rtResult.reactionMedian) : 'unknown';
+    var perf = rtResult ? projectedPerf('perfReaction', rtResult) : null;
+    if (rtResult) rtResult.perf = perf;
+    var perfStatus = perf ? evaluate('perfReaction', perf.value) : 'unknown';
     var lapStatus = rtResult ? evaluate('lapses', rtResult.lapses) : 'unknown';
-    stat('Median reaction', rtResult ? rtResult.reactionMedian + ' ms' : '—', medStatus);
-    stat('Lapses > ' + RT.lapseMs + ' ms', rtResult ? String(rtResult.lapses) : '—', lapStatus);
-    stat('Responses', String(trials.length));
-    stat('False starts', String(falseStarts));
+    statTile(stats, 'Median reaction', rtResult ? rtResult.reactionMedian + ' ms' : '—');
+    statTile(stats, 'Vs your baseline', perf ? perfText('perfReaction', perf) : '—', perfStatus);
+    statTile(stats, 'Lapses > ' + RT.lapseMs + ' ms', rtResult ? String(rtResult.lapses) : '—', lapStatus);
+    statTile(stats, 'Responses · false starts', trials.length + ' · ' + falseStarts);
 
     var advice = document.getElementById('rt-advice');
-    var alert = worst([medStatus, lapStatus]);
     if (!enough) {
       advice.className = 'alertness-note';
       advice.textContent = 'Not enough responses (' + trials.length + ' of ' + RT.minResponses + ' needed) to give a result. Try again when you can focus for a full minute.';
-    } else if (alert === 'yellow' || alert === 'red') {
+    } else if (lapStatus === 'yellow' || lapStatus === 'red') {
       advice.className = 'alertness-note warn';
       advice.textContent = (CONTENT.regions.nervous && CONTENT.regions.nervous.alertness) || '';
     } else {
-      advice.className = 'alertness-note';
-      advice.textContent = 'Within the reference range. Compare with your own trend over the coming days.';
+      performanceNote(advice, perfStatus, perf.value == null);
     }
+    document.getElementById('rt-next').disabled = !enough;
     document.getElementById('rt-use').disabled = !enough;
     rtShow('rt-result');
-    document.getElementById(enough ? 'rt-use' : 'rt-again').focus({ preventScroll: true });
+    document.getElementById(enough ? 'rt-next' : 'rt-again').focus({ preventScroll: true });
+  }
+
+  /* ---- Part 2: working-memory digit test (1 minute) ---- */
+  var MEM = CFG.cognitive.memory;
+  var mem = null;
+  var memResult = null;
+  var memDisplay = document.getElementById('mem-display');
+  var memForm = document.getElementById('mem-form');
+  var memInput = document.getElementById('mem-input');
+  var memFeedback = document.getElementById('mem-feedback');
+
+  function startMem() {
+    memResult = null;
+    mem = { endAt: performance.now() + MEM.durationSec * 1000, length: MEM.startLength, trials: [], timers: [] };
+    rtShow('mem-run');
+    tickMem();
+    nextSequence();
+  }
+
+  function stopMem() {
+    if (!mem) return;
+    mem.timers.forEach(clearTimeout);
+    cancelAnimationFrame(mem.raf);
+    mem = null;
+  }
+
+  function tickMem() {
+    if (!mem) return;
+    var left = Math.max(0, mem.endAt - performance.now());
+    document.getElementById('mem-bar').style.width = (100 - left / (MEM.durationSec * 10)) + '%';
+    document.getElementById('mem-status').textContent = 'Time left ' + Math.ceil(left / 1000) + ' s · ' + mem.trials.length + ' sequences · length ' + mem.length;
+    mem.raf = requestAnimationFrame(tickMem);
+  }
+
+  function nextSequence() {
+    if (!mem) return;
+    if (performance.now() >= mem.endAt) { finishMem(); return; }
+    var seq = '', prev = -1;
+    for (var i = 0; i < mem.length; i++) {
+      var dgt;
+      do { dgt = Math.floor(Math.random() * 10); } while (dgt === prev);   // no immediate repeats
+      seq += dgt; prev = dgt;
+    }
+    mem.seq = seq;
+    memForm.hidden = true;
+    memFeedback.textContent = 'Watch the digits…';
+    memDisplay.textContent = '';
+    var t = 0;
+    seq.split('').forEach(function (ch) {
+      mem.timers.push(setTimeout(function () { if (mem) memDisplay.textContent = ch; }, t));
+      t += MEM.digitMs;
+      mem.timers.push(setTimeout(function () { if (mem) memDisplay.textContent = ''; }, t));
+      t += MEM.gapMs;
+    });
+    mem.timers.push(setTimeout(function () {
+      if (!mem) return;
+      memDisplay.textContent = '?';
+      memFeedback.textContent = 'Type the ' + mem.length + ' digits in order, then press Enter.';
+      memInput.value = '';
+      memForm.hidden = false;
+      memInput.focus({ preventScroll: true });
+    }, t));
+  }
+
+  memForm.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    if (!mem || memForm.hidden) return;
+    var answer = memInput.value.replace(/\D/g, '');
+    var correct = answer === mem.seq;
+    mem.trials.push({ length: mem.length, correct: correct });
+    memForm.hidden = true;
+    memDisplay.textContent = correct ? '✓' : '✕';
+    memFeedback.textContent = correct ? 'Correct.' : 'Not quite. It was ' + mem.seq.split('').join(' ') + '.';
+    mem.length = correct ? Math.min(MEM.maxLength, mem.length + 1) : Math.max(MEM.minLength, mem.length - 1);
+    mem.timers.push(setTimeout(nextSequence, correct ? 700 : 1400));
+  });
+
+  function finishMem() {
+    if (!mem) return;
+    var trials = mem.trials;
+    stopMem();
+    var enough = trials.length >= MEM.minTrials;
+    var correct = trials.filter(function (t) { return t.correct; });
+    memResult = enough ? {
+      memAccuracy: Math.round(correct.length / trials.length * 100),
+      memSpan: correct.reduce(function (m, t) { return Math.max(m, t.length); }, 0),
+      sequences: trials.length
+    } : null;
+    showCogResult(trials.length);
+  }
+
+  /** Final screen: both parts, each compared with the personal baseline. */
+  function showCogResult(memTrials) {
+    var stats = document.getElementById('cog-stats');
+    stats.innerHTML = '';
+    var rPerf = rtResult && rtResult.perf;
+    var mPerf = memResult ? projectedPerf('perfMemory', memResult) : null;
+    if (memResult) memResult.perf = mPerf;
+    var rSt = rPerf ? evaluate('perfReaction', rPerf.value) : 'unknown';
+    var mSt = mPerf ? evaluate('perfMemory', mPerf.value) : 'unknown';
+    statTile(stats, 'Reaction · median', rtResult ? rtResult.reactionMedian + ' ms' : '—');
+    statTile(stats, 'Reaction vs baseline', rPerf ? perfText('perfReaction', rPerf) : '—', rSt);
+    statTile(stats, 'Memory · accuracy · longest', memResult ? memResult.memAccuracy + '% · ' + memResult.memSpan + ' digits' : '—');
+    statTile(stats, 'Memory vs baseline', mPerf ? perfText('perfMemory', mPerf) : '—', mSt);
+    var note = document.getElementById('cog-advice');
+    if (!memResult) {
+      note.className = 'alertness-note';
+      note.textContent = 'Not enough memory sequences (' + memTrials + ' of ' + MEM.minTrials + ' needed). You can still add the reaction result, or run the check again.';
+    } else {
+      performanceNote(note, worst([rSt, mSt]), (rPerf && rPerf.value == null) || mPerf.value == null);
+    }
+    rtShow('cog-result');
+    document.getElementById('cog-use').focus({ preventScroll: true });
+  }
+
+  function addCognitiveResults() {
+    if (rtResult) {
+      form.elements.reactionMedian.value = rtResult.reactionMedian;
+      form.elements.lapses.value = rtResult.lapses;
+    }
+    if (memResult) {
+      form.elements.memAccuracy.value = memResult.memAccuracy;
+      form.elements.memSpan.value = memResult.memSpan;
+    }
+    updateReactionSummary();
+    rtTrigger = openKey ? document.getElementById('drawer-close') : document.getElementById('rt-open');
+    closeReactionTest();
+    toast('Cognitive check added to the check-in form. Record the check-in to save it.');
   }
 
   rtTarget.addEventListener('pointerdown', function (ev) { ev.preventDefault(); respond(); });
@@ -1627,15 +1856,11 @@
   document.getElementById('rt-close').addEventListener('click', closeReactionTest);
   document.getElementById('rt-open').addEventListener('click', function (ev) { openReactionTest(ev.currentTarget); });
   rtOverlay.addEventListener('click', function (ev) { if (ev.target === rtOverlay) closeReactionTest(); });
-  document.getElementById('rt-use').addEventListener('click', function () {
-    if (!rtResult) return;
-    form.elements.reactionMedian.value = rtResult.reactionMedian;
-    form.elements.lapses.value = rtResult.lapses;
-    updateReactionSummary();
-    rtTrigger = openKey ? document.getElementById('drawer-close') : document.getElementById('rt-open');
-    closeReactionTest();
-    toast('Reaction results added to the check-in form. Record the check-in to save them.');
-  });
+  document.getElementById('rt-use').addEventListener('click', function () { memResult = null; addCognitiveResults(); });
+  document.getElementById('rt-next').addEventListener('click', function () { rtShow('mem-intro'); document.getElementById('mem-start').focus({ preventScroll: true }); });
+  document.getElementById('mem-start').addEventListener('click', startMem);
+  document.getElementById('cog-use').addEventListener('click', addCognitiveResults);
+  document.getElementById('cog-again').addEventListener('click', function () { rtResult = null; memResult = null; rtShow('rt-intro'); document.getElementById('rt-start').focus({ preventScroll: true }); });
 
   document.getElementById('clear-user').addEventListener('click', function () {
     if (!userEntries.length) { toast('No entries of yours to clear.'); return; }

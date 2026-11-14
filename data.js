@@ -126,6 +126,26 @@
     if ((DAYS - 1 - idx) % 2 === 0) e.bodyMass = Math.round(mass * 10) / 10;
   });
 
+  // ---- Stage 6c: working-memory test (SYNTHETIC) ---------------------------
+  // Another separate seeded generator, so all earlier synthetic values stay unchanged.
+  var rand5 = mulberry32(2030);
+  function noise5() { return rand5() + rand5() + rand5() - 1.5; }
+  history.forEach(function (e, idx) {
+    var t = idx / (DAYS - 1);
+    var late = Math.max(0, (t - 0.7) / 0.3);
+    e.memSpan = Math.max(3, Math.round(7.2 - 1.3 * late + noise5() * 0.6));
+    e.memAccuracy = Math.min(100, Math.round(88 - 14 * late + noise5() * 4));
+  });
+  // First 3 completed tests form the personal baseline.
+  history[0].memSpan = 7; history[0].memAccuracy = 90;
+  history[1].memSpan = 7; history[1].memAccuracy = 86;
+  history[2].memSpan = 8; history[2].memAccuracy = 88;
+  mid.memSpan = 5; mid.memAccuracy = 67;            // the short-sleep night
+  // Last 3 tests: working memory below the personal baseline (demo of the "monitor" note).
+  history[DAYS - 3].memSpan = 6; history[DAYS - 3].memAccuracy = 76;
+  history[DAYS - 2].memSpan = 6; history[DAYS - 2].memAccuracy = 72;
+  last.memSpan = 5; last.memAccuracy = 70;
+
   window.AURA_SYNTHETIC_HISTORY = history;
   // SYNTHETIC demo profile (height only, used for BMI). A height you enter replaces it.
   window.AURA_SYNTHETIC_PROFILE = { height: 175, source: 'synthetic' };
@@ -148,13 +168,13 @@ window.AURA_CONTENT = {
       name: 'Space radiation', short: 'Radiation',
       summary: 'Beyond the protection of Earth\'s atmosphere and magnetic field, crews receive higher doses of radiation, including from solar particle events.',
       effect: 'Over long missions, radiation may affect the central nervous system, immune cells and blood vessels. Most effects build slowly and are not visible day to day.',
-      indicators: ['mood', 'sleep', 'reactionMedian', 'visionChange', 'temperature', 'systolic', 'diastolic', 'boneResorption']
+      indicators: ['mood', 'sleep', 'perfReaction', 'perfMemory', 'visionChange', 'temperature', 'systolic', 'diastolic', 'boneResorption']
     },
     isolation: {
       name: 'Isolation and confinement', short: 'Isolation',
       summary: 'Crews live and work in a small space with the same few people for months, far from family and friends.',
       effect: 'Isolation and workload may affect mood, sleep and team dynamics, and stress may show up in heart rate, blood pressure and glucose.',
-      indicators: ['mood', 'sleep', 'reactionMedian', 'lapses', 'heartRate', 'systolic', 'diastolic', 'glucose', 'calories7d']
+      indicators: ['mood', 'sleep', 'perfReaction', 'perfMemory', 'lapses', 'heartRate', 'systolic', 'diastolic', 'glucose', 'calories7d']
     },
     distance: {
       name: 'Distance from Earth', short: 'Distance',
@@ -172,7 +192,7 @@ window.AURA_CONTENT = {
       name: 'Hostile and closed environments', short: 'Closed environment',
       summary: 'The spacecraft and spacesuit are closed systems. Oxygen, CO₂, water, noise, lighting, temperature and microbes all need careful control.',
       effect: 'Elevated CO₂ or low oxygen may affect breathing, SpO₂ and alertness, especially during spacewalks. Noise and light may affect sleep and mood, limited water and space may affect hydration and exercise, and shared air may affect exposure to microbes.',
-      indicators: ['spo2', 'respRate', 'cabinCO2', 'sleep', 'mood', 'reactionMedian', 'lapses', 'temperature', 'fluidIntake', 'calories7d', 'resistive7d']
+      indicators: ['spo2', 'respRate', 'cabinCO2', 'sleep', 'mood', 'perfReaction', 'perfMemory', 'lapses', 'temperature', 'fluidIntake', 'calories7d', 'resistive7d']
     }
   },
 
@@ -183,9 +203,9 @@ window.AURA_CONTENT = {
       rest: { indicators: ['sleep', 'mood'], reason: 'may reduce alertness',
         actions: { yellow: 'Consider protecting a 7–9 hour sleep window tonight and checking in with a crewmate or crew support.',
                    red: 'Consider resting tonight with a full sleep window and reaching out to crew support; defer high-risk tasks where mission rules allow.' } },
-      alertness: { indicators: ['reactionMedian', 'lapses'], reason: 'may signal fatigue',
-        actions: { yellow: 'Consider a short rest before critical tasks and re-running the reaction test later today.',
-                   red: 'Consider resting before any critical task and re-testing alertness; low alertness can signal fatigue.' } },
+      alertness: { indicators: ['perfReaction', 'perfMemory', 'lapses'], reason: 'may signal reduced task performance or fatigue',
+        actions: { yellow: 'Consider a short rest before critical tasks and repeating the cognitive check tomorrow at the same time.',
+                   red: 'Task performance may be reduced. Consider rest and contact your flight surgeon.' } },
       balance: { indicators: ['dizziness'], reason: 'may affect coordination and safety',
         actions: { yellow: 'Consider moving your head slowly and avoiding tasks that need fine coordination until it settles.',
                    red: 'Consider stopping tasks that need balance or fine coordination until you have been reviewed.' } },
@@ -246,6 +266,10 @@ window.AURA_CONTENT = {
     mood: 'Consider talking with a crewmate or crew support',
     reactionMedian: 'Consider reviewing sleep and workload',
     lapses: 'Consider reviewing sleep and workload',
+    perfReaction: 'Consider reviewing sleep and workload',
+    perfMemory: 'Consider reviewing sleep, workload and distractions during the test',
+    memAccuracy: 'Consider reviewing sleep and workload',
+    memSpan: 'Consider reviewing sleep and workload',
     fluidIntake: 'Consider setting drink reminders through the day',
     urinaryCalcium: 'Consider reviewing fluid intake and your exercise schedule',
     boneResorption: 'Consider reviewing your exercise schedule',
@@ -257,7 +281,7 @@ window.AURA_CONTENT = {
 
   regions: {
     nervous: {
-      what: 'The nervous system (brain, spinal cord, nerves and the balance organs of the inner ear) coordinates attention, mood, sleep, balance and vision. Daily mood, sleep, a short reaction test and two self-checks for dizziness and vision are simple indicators of how it is coping.',
+      what: 'The nervous system (brain, spinal cord, nerves and the balance organs of the inner ear) coordinates attention, memory, mood, sleep, balance and vision. Daily mood, sleep, a 2-minute cognitive check (reaction and working memory) and two self-checks for dizziness and vision are simple indicators of how it is coping.',
       selfCheck: 'Dizziness and vision items are self-checks only, not diagnoses. Severe dizziness (3) or a noticeable vision change (2) turns this system red.',
       hazards: [
         { id: 'gravity', why: 'Moving between gravity fields may affect the vestibular (balance) system, causing dizziness, motion sickness or coordination problems. The headward fluid shift may be linked to changes in the eye and brain.' },
@@ -269,16 +293,23 @@ window.AURA_CONTENT = {
       measure: [
         'Sleep: log hours from your sleep-tracking wearable or sleep diary right after waking. Note wake-ups and naps.',
         'Mood: rate yourself 1–5 at the same time every day, before high-workload tasks. Be honest; the trend matters more than any single score.',
-        'Alertness: run the 1-minute reaction self-test at the same time each day, in a quiet spot, before caffeine if possible. Brace yourself with a foot restraint and hold the device steady.',
+        'Cognitive check: run it at the same time each day, in a quiet spot, before caffeine if possible. Brace yourself with a foot restraint and hold the device steady. Part 1 is the 1-minute reaction test; part 2 is a 1-minute working-memory test where you type back digit sequences that get longer.',
+        'Your first 3 completed checks become your personal baseline. Results are compared with your own baseline, not with population norms, so try to do the baseline checks when you are well rested.',
         'Dizziness / balance: rate 0–3 for the past 24 hours, including motion sickness, spinning or trouble coordinating movements.',
         'Vision: cover one eye at a time and read the same text card at the same distance each day. Rate 0 (no change), 1 (slight) or 2 (noticeable blur or change).'
       ],
       alertness: 'Low alertness can signal fatigue; consider rest and contact your flight surgeon.',
+      performance: {
+        yellow: 'Task performance may be slightly reduced compared with your own baseline. Consider rest and repeating the cognitive check tomorrow.',
+        red: 'Task performance may be reduced. Consider rest and contact your flight surgeon.',
+        about: 'This is a performance check compared with your own baseline, not an IQ test and not a diagnosis.'
+      },
       research: [
         'NASA lists altered sensorimotor and vestibular function, such as dizziness, motion sickness and coordination problems, among the risks of spaceflight.',
         'NASA also lists spaceflight-associated neuro-ocular syndrome (SANS): changes in eye and brain structure seen in some crew members on long missions.',
         'The reaction self-test is inspired by the psychomotor vigilance test (PVT). NASA\'s Reaction Self Test on the ISS used a brief 3-minute PVT to help astronauts track their alertness, and studies of ISS crews have reported slower psychomotor speed on days with 6 hours of sleep or less.',
-        'The in-app test lasts 1 minute and is not a validated clinical test. Use it to watch your own trend over days, not as a single score.'
+        'The working-memory part is a simple digit-span task: remembering a growing sequence of digits for a few seconds. Short sleep, fatigue and high workload may reduce how well people do on tasks like this.',
+        'Both parts are compared with your own baseline (the average of your first 3 completed checks), not with population norms. This is a performance check, not an IQ test and not a validated clinical test. Use it to watch your own trend over days, not as a single score.'
       ],
       actions: {
         green: [
