@@ -103,6 +103,15 @@
         <span class="meta" id="log-count">—</span>
       </div>
       <form id="checkin-form" novalidate>
+        <details class="field-wide profile">
+          <summary>Profile · height for BMI <em>one-time</em></summary>
+          <div class="profile-row">
+            <label class="field"><span>Height <em>cm</em></span><input type="number" id="profile-height" inputmode="numeric"></label>
+            <button type="button" class="btn btn-ghost" id="profile-save">Save</button>
+          </div>
+          <p class="field-note" id="profile-note">—</p>
+          <p class="field-note">Used only to show BMI in the metabolism panel. Not a daily indicator. Use your preflight height.</p>
+        </details>
         <label class="field field-wide">
           <span>Date</span>
           <input type="date" name="date" required>
@@ -163,6 +172,12 @@
               <label><input type="radio" name="urineColor" value="5"><span style="--sw:#b9781a">5</span></label>
             </div>
           </div>
+        </fieldset>
+        <fieldset class="field-group">
+          <legend>Nutrition</legend>
+          <label class="field"><span>Body mass <em>kg · optional</em></span><input type="number" name="bodyMass" inputmode="decimal" placeholder="not measured"></label>
+          <label class="field"><span>Calories today <em>kcal</em></span><input type="number" name="calories" inputmode="numeric" required></label>
+          <p class="field-note">Body mass comes from the mass-measurement device, not a scale; enter it on days it is measured.</p>
         </fieldset>
         <fieldset class="field-group">
           <legend>Exercise today <em>minutes</em></legend>

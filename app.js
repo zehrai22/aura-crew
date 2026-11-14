@@ -56,8 +56,16 @@
     out.forEach(function (e, i) {
       Object.keys(IND).forEach(function (k) {
         var spec = IND[k];
-        if (spec.derived) {
-          // Only report a total once the history covers the whole window,
+        if (spec.derived && spec.derived.type === 'pctChange') {
+          e[k] = pctChange(raw, out, i, spec.derived);
+          if (e[k] == null && lastSeen[k] && dayDiff(lastSeen[k].date, e.date) < spec.derived.days) {
+            e[k] = lastSeen[k].value;            // not measured today: reuse the latest change
+            e._asof[k] = lastSeen[k].date;
+          } else if (e[k] != null) {
+            lastSeen[k] = { value: e[k], date: e.date };
+          }
+        } else if (spec.derived) {
+          // Only report a value once the history covers the whole window,
           // otherwise early partial sums would look like missed exercise.
           if (dayDiff(out[0].date, e.date) < spec.derived.days - 1) { e[k] = null; return; }
           var sum = 0, count = 0;
@@ -65,7 +73,7 @@
             var v = raw[j][spec.derived.from];
             if (typeof v === 'number' && !isNaN(v)) { sum += v; count++; }
           }
-          e[k] = count ? sum : null;
+          e[k] = !count ? null : spec.derived.agg === 'avg' ? Math.round(sum / count) : sum;
         } else if (spec.carryForwardDays) {
           if (typeof e[k] === 'number' && !isNaN(e[k])) {
             lastSeen[k] = { value: e[k], date: e.date };
@@ -77,6 +85,112 @@
       });
     });
     return out;
+  }
+
+  /**
+   * % change of `from` on entry i versus the most recent measurement at least
+   * `days` (and at most 2 × `days`) earlier. Null when entry i has no measurement.
+   */
+  function pctChange(raw, out, i, d) {
+    var now = raw[i][d.from];
+    if (typeof now !== 'number' || isNaN(now)) return null;
+    for (var j = i - 1; j >= 0; j--) {
+      var gap = dayDiff(out[j].date, out[i].date);
+      if (gap > d.days * 2) break;
+      var ref = raw[j][d.from];
+      if (gap >= d.days && typeof ref === 'number' && ref > 0) return Math.round((now - ref) / ref * 1000) / 10;
+    }
+    return null;
+  }
+
+  /** First recorded body mass and the latest change versus it (for context only). */
+  function massBaseline(history, entry) {
+    var first = null, latest = null;
+    history.forEach(function (e) {
+      if (typeof e.bodyMass !== 'number') return;
+      if (!first) first = e;
+      if (!entry || e.date <= entry.date) latest = e;
+    });
+    if (!first || !latest) return null;
+    return { first: first, latest: latest, pct: Math.round((latest.bodyMass - first.bodyMass) / first.bodyMass * 1000) / 10 };
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Profile (one-time height, used only for BMI)
+   * ------------------------------------------------------------------ */
+  function loadProfile() {
+    try {
+      var p = JSON.parse(localStorage.getItem(CFG.profileKey) || 'null');
+      if (p && typeof p.height === 'number') return { height: p.height, source: 'user' };
+    } catch (e) { /* ignore */ }
+    var syn = window.AURA_SYNTHETIC_PROFILE;
+    return syn ? { height: syn.height, source: 'synthetic' } : { height: null, source: null };
+  }
+  function saveProfile(height) {
+    try { localStorage.setItem(CFG.profileKey, JSON.stringify({ height: height })); } catch (e) { /* ignore */ }
+  }
+  var profile = loadProfile();
+
+  function bmiFor(massKg) {
+    if (!profile.height || typeof massKg !== 'number') return null;
+    var m = profile.height / 100;
+    return Math.round(massKg / (m * m) * 10) / 10;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Trend watch: 14-day linear trend per indicator (early-warning only)
+   * ------------------------------------------------------------------ */
+  var TW = CFG.trendWatch;
+
+  /** Least-squares line through the recorded values of the last TW.days days. */
+  function trendFor(history, k) {
+    var rule = TW.indicators[k];
+    if (!rule || !history.length) return null;
+    var lastDate = history[history.length - 1].date;
+    var pts = [];
+    history.forEach(function (e) {
+      var age = dayDiff(e.date, lastDate);
+      if (age < TW.days && measuredOn(e, k)) pts.push({ x: TW.days - 1 - age, y: e[k] });
+    });
+    if (pts.length < TW.minPoints) return null;
+    var n = pts.length, sx = 0, sy = 0, sxx = 0, sxy = 0, syy = 0;
+    pts.forEach(function (p) { sx += p.x; sy += p.y; sxx += p.x * p.x; sxy += p.x * p.y; syy += p.y * p.y; });
+    var vx = sxx - sx * sx / n, vy = syy - sy * sy / n, cxy = sxy - sx * sy / n;
+    if (vx <= 0) return null;
+    var slope = cxy / vx;
+    var r2 = vy > 0 ? (cxy * cxy) / (vx * vy) : 0;
+    var change = slope * (TW.days - 1);
+    var moving = Math.abs(change) >= rule.step * TW.flatFraction && r2 >= TW.arrowMinR2;
+    var dir = !moving ? 'flat' : change > 0 ? 'up' : 'down';
+    return {
+      k: k, slope: slope, r2: r2, change: change, n: n, dir: dir,
+      unfavorable: dir === rule.worse && Math.abs(change) >= rule.step && r2 >= TW.minR2,
+      strength: Math.abs(change) / rule.step * r2
+    };
+  }
+
+  /**
+   * Trends for all indicators, from recorded history. `watch` is set when the
+   * trend is unfavorable while the shown (latest) value is still within range.
+   */
+  function computeTrends(history, shown) {
+    var out = {};
+    Object.keys(TW.indicators).forEach(function (k) {
+      var t = trendFor(history, k);
+      if (!t) return;
+      t.watch = t.unfavorable && shown && evaluate(k, shown[k]) === 'green';
+      out[k] = t;
+    });
+    return out;
+  }
+
+  function regionTrendWatch(regionKey, trends) {
+    return REGIONS[regionKey].indicators.filter(function (k) { return trends[k] && trends[k].watch; });
+  }
+
+  var ARROWS = { up: '↗', down: '↘', flat: '→' };
+  function trendSentence(t) {
+    return (TW.indicators[t.k].name || IND[t.k].label) + ' has been ' + (t.dir === 'up' ? 'rising' : 'falling') + ' for ' + TW.days + ' days.';
   }
 
   /** True when the value shown for `k` was actually recorded on this entry's date. */
@@ -91,7 +205,7 @@
 
   function evaluate(key, value) {
     var spec = IND[key];
-    if (!spec || value === null || value === undefined || isNaN(value)) return 'unknown';
+    if (!spec || !spec.green || value === null || value === undefined || isNaN(value)) return 'unknown';
     if (inRange(value, spec.green)) return 'green';
     if (inRange(value, spec.yellow)) return 'yellow';
     return 'red';
@@ -122,6 +236,7 @@
   /** Reference text for the "within range" band, using ≥ / ≤ for open-ended ranges. */
   function fmtRef(key) {
     var spec = IND[key], g = spec.green, lim = spec.input;
+    if (!g) return spec.targetLine ? 'target ' + spec.targetLine + ' ' + spec.unit : 'no reference range';
     if (g[0] === g[1]) return fmt(key, g[0]) + (spec.levels && spec.levels[g[0]] ? ' (' + spec.levels[g[0]] + ')' : '');
     if (g[1] >= lim.max) return '≥ ' + fmt(key, g[0]);
     if (g[0] <= lim.min) return '≤ ' + fmt(key, g[1]);
@@ -135,10 +250,16 @@
   function readingNote(entry, k) {
     var spec = IND[k];
     if (!entry) return '';
+    if (spec.derived && spec.derived.type === 'pctChange') {
+      var mb = massBaseline(getHistory(), entry);
+      if (entry[k] == null) return mb ? 'Needs 2 readings 7+ days apart' : 'Not measured yet';
+      return mb ? withUnit('bodyMass', mb.latest.bodyMass) + ' · ' + fmt(k, mb.pct) + '% vs first' : '';
+    }
     if (spec.derived) {
       var today = entry[spec.derived.from];
       if (entry[k] == null) return 'Needs ' + spec.derived.days + ' days of logs';
-      return 'Today ' + (today == null ? '—' : today) + ' min';
+      if (spec.target) return 'Target ' + spec.target + ' ' + spec.unit + ' · today ' + (today == null ? '—' : today);
+      return 'Today ' + (today == null ? '—' : today) + ' ' + IND[spec.derived.from].unit;
     }
     if (entry._asof && entry._asof[k]) return 'Measured ' + shortDate(entry._asof[k]);
     if (spec.levels && entry[k] != null && spec.levels[entry[k]]) return spec.levels[entry[k]];
@@ -359,13 +480,20 @@
       var st = svg('text', { class: 'label-status', x: boxX + 9, y: ly + 11, text: '—' });
       g.appendChild(st);
 
+      // "Trend watch" badge on the label's top edge (shown when a trend is flagged)
+      var tb = svg('g', { class: 'trend-badge', visibility: 'hidden' }, [
+        svg('rect', { x: boxX + boxW - 50, y: ly - 25, width: 46, height: 13, rx: 6.5 }),
+        svg('text', { x: boxX + boxW - 27, y: ly - 15.6, 'text-anchor': 'middle', text: '◇ TREND' })
+      ]);
+      g.appendChild(tb);
+
       g.appendChild(svg('title', { text: REGIONS[key].name }));
       g.addEventListener('click', function () { openRegion(key, g); });
       g.addEventListener('keydown', function (ev) {
         if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openRegion(key, g); }
       });
       root.appendChild(g);
-      regionNodes[key] = { group: g, statusText: st };
+      regionNodes[key] = { group: g, statusText: st, trend: tb };
     });
   }
 
@@ -466,11 +594,14 @@
     document.getElementById('whatif-reset').hidden = !simulating();
   }
 
+  var currentTrends = {};
+
   function render() {
     var history = getHistory();
     var latest = currentEntry(history);
     var previous = history[history.length - 2] || null;
     var overall = overallStatus(latest);
+    currentTrends = computeTrends(history, latest);
     var sim = simulating();
     document.body.classList.toggle('simulating', sim);
     document.getElementById('sim-banner').hidden = !sim;
@@ -485,6 +616,9 @@
       regionNodes[key].group.setAttribute('data-status', s);
       regionNodes[key].group.setAttribute('aria-label', REGIONS[key].name + ': ' + CFG.statusText[s]);
       regionNodes[key].statusText.textContent = CFG.statusText[s];
+      var tw = regionTrendWatch(key, currentTrends);
+      regionNodes[key].trend.setAttribute('visibility', tw.length ? 'visible' : 'hidden');
+      if (tw.length) regionNodes[key].group.setAttribute('aria-label', REGIONS[key].name + ': ' + CFG.statusText[s] + ', trend watch');
     });
 
     // Overall
@@ -519,9 +653,11 @@
     list.innerHTML = '';
     Object.keys(REGIONS).forEach(function (key) {
       var s = regionStatus(key, latest);
+      var tw = regionTrendWatch(key, currentTrends);
       var btn = el('button', { type: 'button', 'data-status': s }, [
         el('span', { class: 'dot' }),
         el('span', { class: 'name', text: REGIONS[key].name }),
+        tw.length ? el('span', { class: 'tw-badge', title: 'Trend watch: ' + tw.map(function (k) { return IND[k].short; }).join(', ') + ' (early-warning signal, not a diagnosis)', text: '◇ Trend' }) : null,
         el('span', { class: 'st', text: CFG.statusText[s] })
       ]);
       btn.addEventListener('click', function () { openRegion(key, btn); });
@@ -560,10 +696,10 @@
       }
       var valNode = el('span', { class: 'r-val', text: fmt(key, v) });
       valNode.appendChild(el('small', { text: spec.unit }));
-      readings.appendChild(el('li', { 'data-status': s, title: CFG.statusText[s] }, [
+      readings.appendChild(el('li', { 'data-status': s, title: CFG.statusText[s], class: currentTrends[key] && currentTrends[key].watch ? 'trend-watch' : '' }, [
         el('span', { class: 'r-name', text: spec.label }),
         valNode,
-        el('span', { class: 'r-ref', text: 'Ref ' + fmtRef(key) }),
+        el('span', { class: 'r-ref' }, [document.createTextNode('Ref ' + fmtRef(key)), trendTag(key)]),
         el('span', { class: 'r-delta', text: deltaText })
       ]));
     });
@@ -571,6 +707,16 @@
     renderPlan(latest);
     renderHazards(latest);
     if (openKey) renderDrawer(openKey);
+  }
+
+  /** " · 14 d ↗" (plus "Trend watch") after an indicator's reference. */
+  function trendTag(k) {
+    var t = currentTrends[k];
+    if (!t) return null;
+    var words = { up: 'rising', down: 'falling', flat: 'steady' }[t.dir];
+    return el('span', { class: 'r-trend' + (t.watch ? ' watch' : ''),
+      title: TW.days + '-day trend: ' + words + (t.watch ? '. Trend watch: early-warning signal, not a diagnosis.' : '') },
+      [document.createTextNode(' · ' + TW.days + ' d ' + ARROWS[t.dir] + (t.watch ? ' Trend watch' : ''))]);
   }
 
   /* ------------------------------------------------------------------ *
@@ -685,6 +831,7 @@
           el('span', { text: nextCheckInText(latest) })
         ])
       ]));
+      renderPlanTrend(body, latest);
       return;
     }
 
@@ -707,6 +854,33 @@
     if (plan.total > plan.items.length) {
       body.appendChild(el('p', { class: 'meta plan-more', text: (plan.total - plan.items.length) + ' more ' +
         (plan.total - plan.items.length === 1 ? 'item' : 'items') + ' in the body-system panels.' }));
+    }
+    renderPlanTrend(body, latest);
+  }
+
+  /** One extra "trend watch" line: the strongest unfavorable trend that is still within range. */
+  function renderPlanTrend(body, latest) {
+    var watches = Object.keys(currentTrends).map(function (k) { return currentTrends[k]; })
+      .filter(function (t) { return t.watch; })
+      .sort(function (a, b) { return b.strength - a.strength; });
+    if (!watches.length) return;
+    var t = watches[0];
+    var rk = Object.keys(REGIONS).filter(function (r) { return REGIONS[r].indicators.indexOf(t.k) >= 0; })[0];
+    var advice = (CONTENT.trendAdvice && CONTENT.trendAdvice[t.k]) || 'Consider reviewing your routine';
+    var text = trendSentence(t) + ' ' + advice + ', and mention it at your next medical check.';
+    var btn = el('button', { type: 'button', class: 'plan-item plan-trend', 'aria-label': 'Trend watch. ' + text + ' Early-warning signal, not a diagnosis.' }, [
+      el('span', { class: 'plan-action', text: text }),
+      el('span', { class: 'plan-why' }, [
+        el('span', { class: 'tw-badge', text: '◇ Trend watch' }),
+        el('span', { class: 'plan-sys', text: REGIONS[rk].name }),
+        el('span', { text: 'Early-warning signal, not a diagnosis. Latest ' + indicatorPhrase(t.k, latest[t.k], true) + ' is still within range.' })
+      ])
+    ]);
+    btn.addEventListener('click', function () { openRegion(rk, btn); });
+    body.appendChild(btn);
+    if (watches.length > 1) {
+      body.appendChild(el('p', { class: 'meta plan-more', text: (watches.length - 1) + ' more trend-watch ' +
+        (watches.length === 2 ? 'signal' : 'signals') + ' in the indicator list.' }));
     }
   }
 
@@ -835,6 +1009,34 @@
     if (content.selfCheck) indKids.push(el('p', { class: 'meta selfcheck', text: content.selfCheck }));
     body.appendChild(section('Indicators used', indKids));
 
+    // Trend watch for this system
+    var tws = regionTrendWatch(key, currentTrends);
+    if (tws.length) {
+      var twl = el('ul', { class: 'research' });
+      tws.forEach(function (k) {
+        var t = currentTrends[k];
+        twl.appendChild(el('li', { text: trendSentence(t) + ' ' + ((CONTENT.trendAdvice && CONTENT.trendAdvice[k]) || 'Consider reviewing your routine') + ', and mention it at your next medical check.' }));
+      });
+      body.appendChild(section('Trend watch', [
+        el('p', { class: 'tw-note', text: 'Early-warning signal, not a diagnosis: these indicators are still within range, but their ' + TW.days + '-day trend may be moving in an unfavorable direction.' }),
+        twl
+      ]));
+    }
+
+    // BMI (metabolism only; height from the one-time profile)
+    if (key === 'metabolism') {
+      var mb = massBaseline(history, latest);
+      var bmi = mb ? bmiFor(mb.latest.bodyMass) : null;
+      var bmiText = !profile.height ? 'Add your height in the check-in profile to see BMI.'
+        : !mb ? 'No body mass recorded yet.'
+        : 'BMI ' + bmi + ' (height ' + profile.height + ' cm' + (profile.source === 'synthetic' ? ', synthetic demo' : '') + ', body mass ' + mb.latest.bodyMass + ' kg on ' + shortDate(mb.latest.date) + '). ' +
+          'Body mass is ' + fmt('massChange7d', mb.pct) + '% versus your first record (' + mb.first.bodyMass + ' kg on ' + shortDate(mb.first.date) + ').';
+      body.appendChild(section('Body mass & BMI', [
+        el('p', { text: bmiText }),
+        el('p', { class: 'meta', text: 'BMI is shown for reference only and does not affect status.' })
+      ]));
+    }
+
     // Alertness: reaction self-test (nervous system)
     if (content.alertness) {
       var alertStatus = worst(['reactionMedian', 'lapses'].map(function (k) { return evaluate(k, latest ? latest[k] : null); }));
@@ -875,8 +1077,9 @@
 
     // 30-day trend
     var recent = history.slice(-30);
-    var charts = region.indicators.map(function (k) { return trendChart(k, recent); });
-    body.appendChild(section('30-day trend', charts.concat([dataTable(region.indicators, recent)])));
+    var chartKeys = region.indicators.concat(region.extraCharts || []);
+    var charts = chartKeys.map(function (k) { return trendChart(k, recent); });
+    body.appendChild(section('30-day trend', charts.concat([dataTable(chartKeys, recent)])));
 
     // How to measure it in space
     if (content.measure) {
@@ -924,7 +1127,10 @@
 
     // Y domain from the data plus any band edges that are not open-ended.
     var lim = spec.input;
-    var inner = [spec.green[0], spec.green[1], spec.yellow[0], spec.yellow[1]].filter(function (b) { return b > lim.min && b < lim.max; });
+    var hasBands = !!spec.green;
+    var inner = (hasBands ? [spec.green[0], spec.green[1], spec.yellow[0], spec.yellow[1]] : [])
+      .concat(spec.targetLine ? [spec.targetLine] : [])
+      .filter(function (b) { return b > lim.min && b < lim.max; });
     var vals = pts.map(function (p) { return p.e[key]; });
     var lo = Math.min.apply(null, vals.concat(inner));
     var hi = Math.max.apply(null, vals.concat(inner));
@@ -941,13 +1147,25 @@
         ', reference ' + fmtRef(key) + '.' });
 
     // Reference bands: yellow (monitor) under green (within range)
-    root.appendChild(svg('rect', { class: 'band band-yellow', x: L, width: W - L - R,
-      y: clampY(spec.yellow[1]), height: clampY(spec.yellow[0]) - clampY(spec.yellow[1]) }));
-    root.appendChild(svg('rect', { class: 'band band-green', x: L, width: W - L - R,
-      y: clampY(spec.green[1]), height: clampY(spec.green[0]) - clampY(spec.green[1]) }));
+    if (hasBands) {
+      root.appendChild(svg('rect', { class: 'band band-yellow', x: L, width: W - L - R,
+        y: clampY(spec.yellow[1]), height: clampY(spec.yellow[0]) - clampY(spec.yellow[1]) }));
+      root.appendChild(svg('rect', { class: 'band band-green', x: L, width: W - L - R,
+        y: clampY(spec.green[1]), height: clampY(spec.green[0]) - clampY(spec.green[1]) }));
+    }
+    if (spec.targetLine) {
+      root.appendChild(svg('line', { class: 'target-line', x1: L, x2: W - R, y1: y(spec.targetLine), y2: y(spec.targetLine) }));
+      root.appendChild(svg('text', { class: 'axis', x: W - R, y: y(spec.targetLine) - 4, 'text-anchor': 'end', text: 'target' }));
+    }
+    if (!hasBands) {
+      // No reference range: label the data's own min and max instead.
+      [Math.min.apply(null, vals), Math.max.apply(null, vals)].forEach(function (v) {
+        root.appendChild(svg('text', { class: 'axis', x: L - 6, y: y(v) + 3, 'text-anchor': 'end', text: fmt(key, v) }));
+      });
+    }
 
     // Y labels at the interior green bounds, X labels at the ends of the window
-    [spec.green[0], spec.green[1]].forEach(function (v) {
+    (hasBands ? [spec.green[0], spec.green[1]] : []).forEach(function (v) {
       if (v <= lim.min || v >= lim.max) return;
       root.appendChild(svg('line', { class: 'gridline', x1: L, x2: W - R, y1: y(v), y2: y(v) }));
       root.appendChild(svg('text', { class: 'axis', x: L - 6, y: y(v) + 3, 'text-anchor': 'end', text: fmt(key, v) }));
@@ -964,7 +1182,7 @@
     pts.forEach(function (p) {
       var st = evaluate(key, p.e[key]);
       var isLast = p === last;
-      if (st === 'green' && !isLast && !sparse && p.e.source !== 'user') return;
+      if ((st === 'green' || st === 'unknown') && !isLast && !sparse && p.e.source !== 'user') return;
       root.appendChild(svg('circle', { class: 'marker' + (p.e.source === 'user' ? ' user' : ''), 'data-status': st,
         cx: x(p.i), cy: y(p.e[key]), r: isLast ? 5 : 4 }));
     });
@@ -1158,6 +1376,30 @@
       });
     }
     document.getElementById('rt-clear').hidden = !has;
+  }
+
+  function setupProfile() {
+    var input = document.getElementById('profile-height');
+    var note = document.getElementById('profile-note');
+    var lim = CFG.profile.height.input;
+    input.min = lim.min; input.max = lim.max; input.step = lim.step;
+    function show() {
+      input.value = profile.source === 'user' ? profile.height : '';
+      input.placeholder = profile.source === 'synthetic' ? profile.height + ' (synthetic demo)' : 'cm';
+      note.textContent = profile.source === 'user' ? 'Saved in this browser: ' + profile.height + ' cm.'
+        : profile.source === 'synthetic' ? 'Using a synthetic demo height until you save your own.' : 'Not set.';
+    }
+    document.getElementById('profile-save').addEventListener('click', function () {
+      var v = parseFloat(input.value);
+      if (isNaN(v) || v < lim.min || v > lim.max) { note.textContent = 'Enter a height between ' + lim.min + ' and ' + lim.max + ' cm.'; input.classList.add('invalid'); return; }
+      input.classList.remove('invalid');
+      saveProfile(Math.round(v));
+      profile = loadProfile();
+      show();
+      render();
+      toast('Height saved. It is used only to show BMI.');
+    });
+    show();
   }
 
   document.getElementById('rt-clear').addEventListener('click', function () {
@@ -1424,9 +1666,10 @@
 
   renderBodyFigure();
   setupForm();
+  setupProfile();
   renderScenarios();
   render();
 
   // Exposed for debugging / later stages.
-  window.AURA = { getHistory: getHistory, indicatorScore: indicatorScore, streak: streak, evaluate: evaluate, regionStatus: regionStatus, overallStatus: overallStatus };
+  window.AURA = { getHistory: getHistory, computeTrends: computeTrends, bmiFor: bmiFor, indicatorScore: indicatorScore, streak: streak, evaluate: evaluate, regionStatus: regionStatus, overallStatus: overallStatus };
 })();

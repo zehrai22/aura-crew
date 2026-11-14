@@ -14,9 +14,15 @@
  *                     status for up to this many days
  *   signed          : show a "+" sign for positive values
  *   levels          : names for each value of a self-rated scale
+ *   derived.agg     : 'sum' (default) or 'avg' over the window;
+ *   derived.type    : 'pctChange' = % change versus the value `days` earlier
  *
  * These values are decision-support placeholders, not clinical criteria.
  */
+// ASSUMPTION - daily energy intake target, to be reviewed against NASA HRP sources.
+// Real targets are set per crew member by the mission nutrition team.
+var AURA_CALORIE_TARGET = 2700; // kcal/day
+
 window.AURA_CONFIG = {
   // ASSUMPTION - general adult reference ranges, to be reviewed against NASA HRP sources
   indicators: {
@@ -251,8 +257,65 @@ window.AURA_CONFIG = {
       optional: true,
       carryForwardDays: 30,
       input: { min: -100, max: 500, step: 1 }
+    },
+
+    // --- Metabolism: body mass and energy intake ---
+    // Daily inputs (no thresholds of their own; charted in the metabolism panel)
+    bodyMass: {
+      label: 'Body mass',
+      short: 'Body mass',
+      unit: 'kg',
+      decimals: 1,
+      inputOnly: true,
+      optional: true,
+      input: { min: 30, max: 200, step: 0.1 }
+    },
+    calories: {
+      label: 'Calorie intake today',
+      short: 'Calories today',
+      unit: 'kcal',
+      decimals: 0,
+      inputOnly: true,
+      targetLine: AURA_CALORIE_TARGET,
+      input: { min: 0, max: 8000, step: 10 }
+    },
+    // ASSUMPTION - general adult reference ranges, to be reviewed against NASA HRP sources
+    // Status: % change of body mass over 7 days. A drop of more than 3% is
+    // "monitor", more than 5% is "attention". The change versus the first
+    // recorded value is shown alongside for context.
+    massChange7d: {
+      label: 'Body mass change over 7 days',
+      short: 'Body mass change (7 d)',
+      unit: '%',
+      decimals: 1,
+      signed: true,
+      green: [-3, 100],
+      yellow: [-5, 100],
+      derived: { from: 'bodyMass', type: 'pctChange', days: 7 },
+      input: { min: -100, max: 100, step: 0.1 }
+    },
+    // ASSUMPTION - general adult reference ranges, to be reviewed against NASA HRP sources
+    // Status: 7-day average intake versus AURA_CALORIE_TARGET.
+    // Within range 90–125% of target, monitor 80–90% or 125–140%, attention beyond.
+    calories7d: {
+      label: 'Calorie intake, 7-day average',
+      short: 'Calorie intake (7-day avg)',
+      unit: 'kcal',
+      decimals: 0,
+      green: [Math.round(AURA_CALORIE_TARGET * 0.9), Math.round(AURA_CALORIE_TARGET * 1.25)],
+      yellow: [Math.round(AURA_CALORIE_TARGET * 0.8), Math.round(AURA_CALORIE_TARGET * 1.4)],
+      target: AURA_CALORIE_TARGET,
+      derived: { from: 'calories', days: 7, agg: 'avg' },
+      input: { min: 0, max: 8000, step: 10 }
     }
   },
+
+  // One-time profile (stored in this browser). Height is used only to show BMI
+  // in the metabolism panel; it is not a daily indicator and does not affect status.
+  profile: {
+    height: { label: 'Height', unit: 'cm', input: { min: 120, max: 220, step: 1 } }
+  },
+  profileKey: 'aura-crew.profile.v1',
 
   // Order of indicators on the dashboard, in the score and on the check-in form.
   dashboardIndicators: [
@@ -261,14 +324,53 @@ window.AURA_CONFIG = {
     'spo2', 'respRate', 'cabinCO2',
     'fluidIntake', 'urineColor', 'urinaryCalcium',
     'resistive7d', 'aerobic7d', 'boneResorption',
-    'temperature', 'glucose'
+    'temperature',
+    'glucose', 'massChange7d', 'calories7d'
   ],
   formFields: [
     'systolic', 'diastolic', 'heartRate', 'spo2', 'respRate', 'cabinCO2',
     'glucose', 'temperature', 'sleep', 'mood', 'dizziness', 'visionChange',
     'fluidIntake', 'urineColor', 'resistiveMin', 'aerobicMin',
-    'urinaryCalcium', 'boneResorption', 'reactionMedian', 'lapses'
+    'urinaryCalcium', 'boneResorption', 'reactionMedian', 'lapses',
+    'bodyMass', 'calories'
   ],
+
+  // ASSUMPTION - trend-watch thresholds, to be reviewed against NASA HRP sources.
+  // Early-warning signal only, not a diagnosis. For each listed indicator a
+  // straight line is fitted to the recorded values of the last `days` days.
+  // "Trend watch" is raised when the latest value is still within range but the
+  // line moves in the `worse` direction by at least `step` over the window and
+  // fits the data steadily (R² ≥ minR2). `name` (optional) is used in the
+  // trend sentence. Arrows: a change below
+  // step × flatFraction (or R² below arrowMinR2) is shown as steady (→).
+  trendWatch: {
+    days: 14,
+    minPoints: 6,           // body mass is measured every other day: 7 readings in 14 days
+    minR2: 0.6,
+    arrowMinR2: 0.3,
+    flatFraction: 0.5,
+    indicators: {
+      systolic: { worse: 'up', step: 8 },
+      diastolic: { worse: 'up', step: 5 },
+      heartRate: { worse: 'up', step: 6 },
+      spo2: { worse: 'down', step: 1.5 },
+      respRate: { worse: 'up', step: 2 },
+      cabinCO2: { worse: 'up', step: 400 },
+      glucose: { worse: 'up', step: 8 },
+      temperature: { worse: 'up', step: 0.3 },
+      sleep: { worse: 'down', step: 0.7 },
+      mood: { worse: 'down', step: 0.8 },
+      reactionMedian: { worse: 'up', step: 25 },
+      lapses: { worse: 'up', step: 1.5 },
+      fluidIntake: { worse: 'down', step: 0.3 },
+      urinaryCalcium: { worse: 'up', step: 10 },
+      boneResorption: { worse: 'up', step: 10 },
+      resistive7d: { worse: 'down', step: 60 },
+      aerobic7d: { worse: 'down', step: 45 },
+      massChange7d: { worse: 'down', step: 1, name: 'Body mass' },
+      calories7d: { worse: 'down', step: 150, name: 'Average calorie intake' }
+    }
+  },
 
   // ASSUMPTION - reaction self-test settings, to be reviewed against NASA HRP sources.
   // Inspired by the psychomotor vigilance test (PVT); not a validated clinical test.
@@ -309,7 +411,9 @@ window.AURA_CONFIG = {
     },
     metabolism: {
       name: 'Metabolism',
-      indicators: ['glucose', 'temperature']
+      indicators: ['glucose', 'massChange7d', 'calories7d'],
+      // Daily inputs charted in the panel for context (no status of their own)
+      extraCharts: ['bodyMass', 'calories']
     },
     musculoskeletal: {
       name: 'Bones & muscle',
@@ -334,7 +438,7 @@ window.AURA_CONFIG = {
       label: 'Skip exercise',
       detail: '3 days without countermeasure exercise',
       hazard: 'gravity',
-      deltas: { resistive7d: -165, aerobic7d: -105, urinaryCalcium: 10, heartRate: 5, systolic: 4, glucose: 8, mood: -1 }
+      deltas: { resistive7d: -165, aerobic7d: -105, urinaryCalcium: 10, massChange7d: -0.5, heartRate: 5, systolic: 4, glucose: 8, mood: -1 }
     },
     sleepDeficit: {
       label: 'Sleep deficit',
@@ -352,7 +456,7 @@ window.AURA_CONFIG = {
       label: 'Spacewalk day',
       detail: 'Long EVA in the suit, little to drink',
       hazard: 'environment',
-      deltas: { heartRate: 10, respRate: 4, spo2: -2, fluidIntake: -0.8, urineColor: 1, dizziness: 1, sleep: -1 }
+      deltas: { heartRate: 10, respRate: 4, spo2: -2, fluidIntake: -0.8, urineColor: 1, dizziness: 1, sleep: -1, calories7d: -150 }
     }
   },
 

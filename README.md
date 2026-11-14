@@ -16,12 +16,23 @@ An astronaut records a short daily check-in. AURA-CREW compares each reading wit
   - If any system is red, a red "Contact your flight surgeon" banner lists the indicators outside the monitor range and their systems.
   - If everything is within range, the card says "No action needed today. Keep your routine." and suggests the next check-in.
   - The card updates live with new check-ins and with the what-if toggles, and is marked "Simulated" while a scenario is on.
+  - It also adds one **trend watch** line (see below) for the strongest unfavorable 14-day trend, for example "Body mass has been falling for 14 days. Consider reviewing food intake and appetite, and mention it at your next medical check."
   - Actions use "consider" and "may" wording, and the card ends with "Decision support only, confirm with your medical officer." The action texts and reasons are in `data.js` (`AURA_CONTENT.plan`).
-- **Daily check-in** with blood pressure (systolic and diastolic), resting heart rate, SpO₂, respiratory rate, blood glucose (mg/dL), body temperature, sleep hours, mood (1–5), dizziness/balance (0–3) and vision change (0–2) self-checks, fluid intake (L), urine color (1–5) and minutes of resistive and aerobic exercise. Optional fields cover cabin CO₂ (ppm), two bone and kidney markers, and the reaction self-test result. A new entry updates the whole app right away. Entries are kept in your browser's `localStorage`, and an entry for a date replaces the synthetic entry for that date.
+- **Trend watch (early-warning signal, not a diagnosis).** For every numeric indicator, AURA-CREW fits a simple straight line to the recorded values of the last 14 days.
+  - Every indicator in the list shows its 14-day arrow (↗ rising, ↘ falling, → steady).
+  - When an indicator's latest value is still within range, but the line moves steadily in an unfavorable direction, the app does three things. It marks the indicator "Trend watch", adds a small ◇ TREND badge to its body system on the figure and in the system list, and lists it in that system's panel.
+  - Self-rated scales (dizziness, vision, urine color) are not trended.
+- **Daily check-in** with blood pressure (systolic and diastolic), resting heart rate, SpO₂, respiratory rate, blood glucose (mg/dL), body temperature, sleep hours, mood (1–5), dizziness/balance (0–3) and vision change (0–2) self-checks, fluid intake (L), urine color (1–5), calorie intake (kcal) and minutes of resistive and aerobic exercise. Optional fields cover body mass (kg), cabin CO₂ (ppm), two bone and kidney markers, and the reaction self-test result. A one-time profile stores height (cm), used only to show BMI. A new entry updates the whole app right away. Entries are kept in your browser's `localStorage`, and an entry for a date replaces the synthetic entry for that date.
 - **Interactive 2D body figure** with seven clickable, labeled systems: nervous system, cardiovascular, respiratory, urinary and renal, bones and muscle, immune system, and metabolism. Each one turns green (within range), yellow (monitor) or red (attention) based on the latest indicators it depends on. The overall status is shown alongside.
 - **Region panel** for each system. It covers what the system does and why spaceflight may affect it, linked to the five NASA HRP hazards. It also has a 30-day trend chart per indicator (with reference bands, a hover tooltip and a data table), how to measure the indicators in space, and 2–3 recommended actions that depend on the current status. A red status adds a "Contact your flight surgeon" note. Every recommendation ends with "Decision support only, confirm with your medical officer."
 
 - **Bones & muscle indicators.** The status uses 7-day totals of resistive and aerobic exercise minutes (the main in-flight countermeasure). It also uses two optional bone markers when provided: urinary calcium change and bone resorption marker change, each as % versus the preflight baseline. These markers come from periodic samples, not daily ones, so the most recent value from the last 30 days is used for status, and the charts show only the days they were measured. A 7-day total appears once the log covers a full 7 days. The panel explains that NASA research reports urinary calcium and bone resorption markers rise during spaceflight while bone formation markers stay unchanged or fall, and that exercise countermeasures reduce but do not fully prevent muscle and bone loss.
+- **Metabolism indicators.** The status uses fasting glucose, body mass and calorie intake.
+  - **Body mass:** the status uses the % change over 7 days. A drop of more than 3% is "monitor" and more than 5% is "attention". The change versus your own first recorded value is shown alongside.
+  - **Calorie intake:** the status compares the 7-day average with a target in `config.js`.
+  - **Body mass entry:** body mass is optional, entered on days it is measured, and the latest 7-day change is reused for up to 7 days.
+  - **BMI:** shown in the panel from the profile height, for reference only; it is not a daily indicator.
+  - **Panel text:** it notes that NASA lists inadequate food and nutrition among spaceflight risks, and that in microgravity body mass is measured with special devices, not a normal scale.
 - **Respiratory indicators.** SpO₂, resting respiratory rate and optional cabin CO₂ (read from the cabin display). The panel links them to the hostile and closed environments hazard and notes that NASA lists hypoxia, including exposure to low oxygen and high CO₂ during spacewalks, among spaceflight risks.
 - **Urinary & renal indicators.** Daily fluid intake, urine color (1 = pale, 5 = amber) and the optional urinary calcium change, which is shared with bones & muscle. The panel explains that urinary calcium increases during flight, that kidney stones are a risk on long missions, and that adequate fluid intake is a common countermeasure.
 - **Nervous system** (formerly "Brain & mind"). Mood, sleep and the reaction self-test, plus two self-checks: dizziness/balance problems (0 none, 1 mild, 2 moderate, 3 severe) and vision change (0 none, 1 slight, 2 noticeable). The panel notes that NASA lists altered sensorimotor and vestibular function (dizziness, motion sickness, coordination problems) and spaceflight-associated neuro-ocular syndrome (SANS, changes in eye and brain structure) among spaceflight risks. Severe dizziness (3) or a noticeable vision change (2) turns the system red with the flight-surgeon note. These are self-checks only, not diagnoses.
@@ -37,7 +48,7 @@ An astronaut records a short daily check-in. AURA-CREW compares each reading wit
 |---|---|
 | `index.html` | Page layout |
 | `style.css` | Holographic HUD styling, responsive layout, animations |
-| `app.js` | Status logic, today's action plan, derived indicators (7-day totals, marker carry-forward), SVG body figure, check-in form, region panel, reaction self-test |
+| `app.js` | Status logic, today's action plan, trend watch, profile/BMI, derived indicators (7-day totals, marker carry-forward), SVG body figure, check-in form, region panel, reaction self-test |
 | `config.js` | **All thresholds**, the indicator-to-system mapping, reaction-test timing, what-if offsets and score points (each marked *ASSUMPTION*) |
 | `data.js` | 30 days of **synthetic** demo history (seeded and reproducible), plus the panel text and hazard content |
 
@@ -80,6 +91,13 @@ The values are general adult placeholders and are not mission or clinical criter
 | Cabin CO₂ (optional) | ≤ 3300 ppm (≈ 2.5 mmHg) | 3301–5300 ppm | > 5300 ppm (≈ 4 mmHg) |
 | Fluid intake | 2.0–5.0 L | 1.5–1.9 or 5.1–6.0 L | < 1.5 or > 6.0 L |
 | Urine color | 1–2 | 3 | 4–5 |
+| Body mass change over 7 days | > −3 % | −3 to −5 % | < −5 % |
+| Calorie intake, 7-day average (target 2700 kcal/day) | 90–125 % of target | 80–90 % or 125–140 % | < 80 % or > 140 % |
+
+**Trend watch** (`trendWatch` in `config.js`, also marked *ASSUMPTION*):
+- A line is fitted to at least 6 recorded values from the last 14 days.
+- The trend is flagged when three things hold: the latest value is within range, the line moves in the unfavorable direction by at least the indicator's `step` over 14 days (for example 8 mmHg systolic, 0.7 h sleep, 1 percentage point of 7-day body mass change, 150 kcal of 7-day average intake), and it fits steadily (R² ≥ 0.6).
+- It is an early-warning signal only, not a diagnosis.
 
 Optional indicators that were not provided are shown as "not measured" and don't affect a system's status or the score.
 
@@ -98,6 +116,7 @@ HRP risks behind the spaceflight-specific indicators (listed on the Risks of Hum
 - Risk of Spaceflight Associated Neuro-ocular Syndrome (SANS)
 - Risk of Renal Stone Formation
 - Risk of Reduced Crew Health and Performance Due to Hypoxia
+- Risk of Performance Decrements and Adverse Health Outcomes Resulting from Inadequate Food and Nutrition
 
 Background for the bone and alertness indicators:
 

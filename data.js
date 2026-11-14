@@ -113,7 +113,22 @@
   last.spo2 = 97; last.respRate = 15; last.cabinCO2 = 2900;
   last.fluidIntake = 2.1; last.urineColor = 3; last.dizziness = 0; last.visionChange = 0;
 
+  // ---- Stage 8 indicators (SYNTHETIC) -------------------------------------
+  // Another separate seeded generator, so all earlier synthetic values stay unchanged.
+  var rand4 = mulberry32(2029);
+  function noise4() { return rand4() + rand4() + rand4() - 1.5; }
+  history.forEach(function (e, idx) {
+    var t = idx / (DAYS - 1);
+    var late = Math.max(0, (t - 0.55) / 0.45);       // slow drift over the second half
+    e.calories = Math.round((2700 - 260 * late + noise4() * 110) / 10) * 10;
+    // Body mass from the mass-measurement device, every other day (not a daily scale).
+    var mass = 72.4 - 0.03 * idx - 1.5 * late * late + noise4() * 0.12;
+    if ((DAYS - 1 - idx) % 2 === 0) e.bodyMass = Math.round(mass * 10) / 10;
+  });
+
   window.AURA_SYNTHETIC_HISTORY = history;
+  // SYNTHETIC demo profile (height only, used for BMI). A height you enter replaces it.
+  window.AURA_SYNTHETIC_PROFILE = { height: 175, source: 'synthetic' };
 })();
 
 /*
@@ -139,25 +154,25 @@ window.AURA_CONTENT = {
       name: 'Isolation and confinement', short: 'Isolation',
       summary: 'Crews live and work in a small space with the same few people for months, far from family and friends.',
       effect: 'Isolation and workload may affect mood, sleep and team dynamics, and stress may show up in heart rate, blood pressure and glucose.',
-      indicators: ['mood', 'sleep', 'reactionMedian', 'lapses', 'heartRate', 'systolic', 'diastolic', 'glucose']
+      indicators: ['mood', 'sleep', 'reactionMedian', 'lapses', 'heartRate', 'systolic', 'diastolic', 'glucose', 'calories7d']
     },
     distance: {
       name: 'Distance from Earth', short: 'Distance',
       summary: 'The farther from Earth, the longer the communication delay and the less real-time support, medical care and resupply.',
       effect: 'Greater autonomy may add stress that affects mood and sleep. Limited care options make early self-monitoring more important, including for conditions such as kidney stones that would be hard to treat far from Earth.',
-      indicators: ['mood', 'sleep', 'lapses', 'fluidIntake', 'urinaryCalcium']
+      indicators: ['mood', 'sleep', 'lapses', 'fluidIntake', 'calories7d', 'urinaryCalcium']
     },
     gravity: {
       name: 'Gravity fields', short: 'Gravity',
       summary: 'Crews move between gravity fields: weightlessness in flight, partial gravity on the Moon or Mars, and full gravity on return to Earth.',
       effect: 'Gravity transitions may affect balance and coordination, and the headward fluid shift may be linked to changes in the eye. Unloading may raise urinary calcium (with a higher kidney stone risk) and bone resorption markers, and may lead to bone and muscle loss, which exercise reduces but does not fully prevent.',
-      indicators: ['dizziness', 'visionChange', 'systolic', 'diastolic', 'heartRate', 'glucose', 'urinaryCalcium', 'urineColor', 'resistive7d', 'aerobic7d', 'boneResorption']
+      indicators: ['dizziness', 'visionChange', 'systolic', 'diastolic', 'heartRate', 'glucose', 'massChange7d', 'urinaryCalcium', 'urineColor', 'resistive7d', 'aerobic7d', 'boneResorption']
     },
     environment: {
       name: 'Hostile and closed environments', short: 'Closed environment',
       summary: 'The spacecraft and spacesuit are closed systems. Oxygen, CO₂, water, noise, lighting, temperature and microbes all need careful control.',
       effect: 'Elevated CO₂ or low oxygen may affect breathing, SpO₂ and alertness, especially during spacewalks. Noise and light may affect sleep and mood, limited water and space may affect hydration and exercise, and shared air may affect exposure to microbes.',
-      indicators: ['spo2', 'respRate', 'cabinCO2', 'sleep', 'mood', 'reactionMedian', 'lapses', 'temperature', 'fluidIntake', 'resistive7d']
+      indicators: ['spo2', 'respRate', 'cabinCO2', 'sleep', 'mood', 'reactionMedian', 'lapses', 'temperature', 'fluidIntake', 'calories7d', 'resistive7d']
     }
   },
 
@@ -204,10 +219,40 @@ window.AURA_CONTENT = {
       temperature: { indicators: ['temperature'], reason: 'may signal an immune response',
         actions: { yellow: 'Consider re-checking temperature in 4–6 hours with the same method, and resting.',
                    red: 'Consider resting, following the crew health protocol for close contact, and re-checking temperature.' } },
+      bodyMass: { indicators: ['massChange7d'], reason: 'may reflect an energy deficit or muscle loss',
+        actions: { yellow: 'Consider reviewing your food intake with your nutrition or medical team and re-measuring body mass in a few days.',
+                   red: 'Consider sharing your body mass and food log with your medical officer soon.' } },
+      calories: { indicators: ['calories7d'], reason: 'may not cover your energy needs',
+        actions: { yellow: 'Consider adding planned snacks or completing more of each meal, and logging what you eat for a few days.',
+                   red: 'Consider asking your nutrition or medical team to review your intake and appetite.' } },
       glucose: { indicators: ['glucose'], reason: 'may affect energy and blood sugar control',
         actions: { yellow: 'Consider re-measuring fasting glucose tomorrow before eating and logging meals.',
                    red: 'Consider re-checking glucose now with a fresh strip and noting any symptoms.' } }
     }
+  },
+
+  // Trend watch: what to consider when an indicator drifts in an unfavorable
+  // direction while it is still within range. Early-warning signal, not a diagnosis.
+  trendAdvice: {
+    systolic: 'Consider reviewing sleep, fluid intake and workload',
+    diastolic: 'Consider reviewing sleep, fluid intake and workload',
+    heartRate: 'Consider reviewing sleep, stress and your exercise recovery',
+    spo2: 'Consider checking the ventilation where you sleep and work',
+    respRate: 'Consider checking ventilation and how rested you are',
+    cabinCO2: 'Consider asking the crew to review cabin ventilation',
+    glucose: 'Consider reviewing meal timing and exercise',
+    temperature: 'Consider prioritizing rest and hydration',
+    sleep: 'Consider protecting your sleep window and reviewing your schedule',
+    mood: 'Consider talking with a crewmate or crew support',
+    reactionMedian: 'Consider reviewing sleep and workload',
+    lapses: 'Consider reviewing sleep and workload',
+    fluidIntake: 'Consider setting drink reminders through the day',
+    urinaryCalcium: 'Consider reviewing fluid intake and your exercise schedule',
+    boneResorption: 'Consider reviewing your exercise schedule',
+    resistive7d: 'Consider planning your resistive sessions earlier in the day',
+    aerobic7d: 'Consider planning your aerobic sessions earlier in the day',
+    massChange7d: 'Consider reviewing food intake and appetite',
+    calories7d: 'Consider reviewing appetite, meal timing and food preferences'
   },
 
   regions: {
@@ -389,32 +434,39 @@ window.AURA_CONTENT = {
     },
 
     metabolism: {
-      what: 'Metabolism turns food into energy and keeps blood sugar and body temperature within a stable range.',
+      what: 'Metabolism turns food into energy, keeps blood sugar stable and maintains body mass. AURA-CREW tracks fasting glucose, the 7-day change in body mass and the 7-day average calorie intake against a target. Height (from your profile) is used only to show BMI for reference.',
+      research: [
+        'NASA lists inadequate food and nutrition among the risks of spaceflight. Many crew members eat less than planned in flight and may lose body mass.',
+        'In microgravity, body mass cannot be measured with a normal scale, because nothing presses down on it. Special devices are used instead, such as a mass-measurement device that gently accelerates the body (as on the ISS) or an oscillating-chair device.',
+        'Body mass status uses the change over 7 days. A steady loss can reflect an energy deficit, so it is compared with your own earlier values, not with a population norm.'
+      ],
       hazards: [
-        { id: 'gravity', why: 'Reduced physical loading and muscle use in microgravity may change how the body handles blood sugar.' },
-        { id: 'environment', why: 'A packaged food system with limited fresh food may affect nutrition and energy balance.' },
-        { id: 'isolation', why: 'Stress and disrupted sleep may affect appetite and glucose regulation.' },
+        { id: 'environment', why: 'A packaged food system with limited fresh food and changed taste may reduce appetite and affect nutrition and energy balance.' },
+        { id: 'distance', why: 'Far from Earth, food resupply is limited, so food must last and stay nutritious for the whole mission.' },
+        { id: 'gravity', why: 'Reduced physical loading in microgravity may change how the body handles blood sugar and may contribute to muscle and body mass loss.' },
+        { id: 'isolation', why: 'Stress, workload and disrupted sleep may affect appetite and glucose regulation.' },
         { id: 'radiation', why: 'Radiation may affect cellular metabolism; this is still being studied.' }
       ],
       measure: [
-        'Measure fasting glucose in the morning, before food or coffee.',
-        'Clean and dry the fingertip, use a fresh strip and lancet, and capture the drop carefully. In microgravity, droplets cling to the skin, so touch the strip directly to the drop.',
-        'Measure temperature at the same time and with the same method each day.'
+        'Glucose: measure fasting glucose in the morning, before food or coffee. Clean and dry the fingertip and use a fresh strip. In microgravity, droplets cling to the skin, so touch the strip directly to the drop.',
+        'Body mass (optional, when scheduled): use the vehicle\'s body mass measurement device, not a scale. Wear the same light clothing, measure before breakfast and after using the toilet, and hold the posture shown in the device procedure.',
+        'Calories: add up the energy (kcal) listed on the food packages you ate today, including drinks and snacks. Most crews log this in the food-tracking app.',
+        'Height: enter it once in your profile. On orbit the spine lengthens slightly, so use your preflight height.'
       ],
       actions: {
         green: [
           'Keep following the mission diet plan and meal timing.',
-          'Keep your exercise schedule, which also supports blood sugar regulation.'
+          'Keep your exercise schedule, which also supports blood sugar regulation and muscle mass.'
         ],
         yellow: [
           'Re-measure fasting glucose tomorrow morning before eating.',
-          'Log meals and snacks for the next 2–3 days to share with your medical officer.',
-          'Review meal timing around exercise and sleep.'
+          'Log meals and snacks for the next 2–3 days to share with your nutrition or medical team.',
+          'If body mass is falling, consider adding planned snacks and re-measuring in a few days.'
         ],
         red: [
-          'Re-check now with a fresh strip, following the measurement steps.',
-          'Note any symptoms such as shakiness, sweating, thirst or confusion, and tell a crewmate.',
-          'Keep your logged readings and meals ready for the medical team.'
+          'Re-check glucose now with a fresh strip, following the measurement steps.',
+          'Share your body mass trend and food log with your medical officer.',
+          'Note any symptoms such as shakiness, sweating, thirst, weakness or confusion, and tell a crewmate.'
         ]
       }
     },
