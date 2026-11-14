@@ -8,16 +8,27 @@ An astronaut records a short daily check-in. AURA-CREW tells them what to do now
 >
 > **Synthetic demo data.** The 30-day history in `data.js` is made up. It is not real astronaut or patient data, and the UI labels it with a "Synthetic demo data" badge.
 
+## App layout: 4 tabs
+
+The app is split into four tabs, so no tab needs long scrolling. Tabs sit at the top on desktop and in a bottom tab bar on phones. They are keyboard accessible (arrow keys, Home and End move between tabs), and the last tab you used is remembered in `localStorage`.
+
+1. **Overview:** the Vital signs strip, Today's action plan, and the body figure with its 7 clickable systems, overall status chip and hazard legend.
+2. **Check-in:** the daily check-in form and the cognitive check. Recording a check-in switches to Overview and refreshes everything.
+3. **Trends:** a system selector at the top, then for the selected system one chart at a time (indicator chips switch charts), its data table, a link to the full system panel and its latest indicators. Alongside are the indicator score and check-in streak, plus the trend-watch list (tap a signal to open its chart).
+4. **Simulate & About:** what-if scenarios, the synthetic demo data note, the roadmap and the NASA HRP references.
+
+While a what-if scenario is on, a "Simulation on" badge shows in the header on every tab; tapping it opens Simulate & About.
+
 ## Features
 
-- **Vital signs strip** at the top of the dashboard: five large tiles for body temperature, heart rate, blood pressure, respiratory rate and oxygen saturation (SpO₂).
+- **Vital signs strip** at the top of the Overview tab: five large tiles for body temperature, heart rate, blood pressure, respiratory rate and oxygen saturation (SpO₂).
   - Each tile shows the latest value with its unit, a green/yellow/red status colour with a text label (never colour alone), a 7-day sparkline and its reference range.
   - Blood pressure shows systolic/diastolic on one tile and takes the worse status of the two.
   - One overall chip reads "Vital signs: stable" (all green), "monitor" (any yellow) or "attention" (any red). On attention, a "Contact your flight surgeon" note names the values outside the monitor range.
   - Tapping a tile opens the related body-system panel (temperature → immune, heart rate and blood pressure → cardiovascular, respiratory rate and SpO₂ → respiratory).
   - It uses the same check-in data and `config.js` thresholds (no new inputs), updates live with new check-ins and what-if toggles, and says "simulated" while a scenario is on.
-  - These five values are not repeated in the "Latest indicators" list. On phones the tiles scroll horizontally.
-- **Today's action plan** (the main decision-support card, at the top of the dashboard). It collects actions from all seven body systems and ranks them: red before yellow, then by the most severe system. It shows the top 3 as a numbered list.
+  - These five values are not repeated in the "Latest indicators" list on the Trends tab. On phones the tiles scroll horizontally.
+- **Today's action plan** (the main decision-support card, on the Overview tab). It collects actions from all seven body systems and ranks them: red before yellow, then by the most severe system. It shows the top 3 as a numbered list.
   - Actions are grouped by related indicators (for example rest = sleep + mood, hydration = fluid intake + urine color), so a shared indicator such as sleep produces one action, not two.
   - Each action has a one-line reason that names the indicators behind it, such as "Sleep 4.5 h and mood 2/5 may reduce alertness", plus a status dot and the body system it belongs to. Tapping an action opens that system's panel.
   - If any system is red, a red "Contact your flight surgeon" banner lists the indicators outside the monitor range and their systems.
@@ -56,8 +67,8 @@ An astronaut records a short daily check-in. AURA-CREW tells them what to do now
   - **Where results appear:** in the check-in, the nervous system status, the score, the action plan and trend watch. The panel charts the baseline comparisons plus raw reaction time, memory accuracy and longest sequence.
 - **Hazard legend.** A compact strip of the five NASA HRP hazards under the body figure ("Possible contributing hazards"). Hovering a tag shows a one-line summary and the indicators it *may affect*. Selecting a tag highlights the body systems it may affect and dims the others.
 
-- **What-if scenarios.** Four toggles (skip exercise, sleep deficit, radiation event, spacewalk day) apply illustrative offsets to the latest check-in, including exercise totals, reaction results, breathing, hydration and cabin CO₂, so you can see how indicators and body-system status may shift. A "Simulation · not real data" banner appears while any toggle is on. Nothing is saved, and the trend charts always show recorded data.
-- **Indicator score and streak.** A 0–100 daily indicator score (the average of per-indicator points: within range 100, monitor 60, attention 20) with its 7-day average, plus a check-in streak counting consecutive logged days up to today.
+- **What-if scenarios** (Simulate & About tab). Four toggles (skip exercise, sleep deficit, radiation event, spacewalk day) apply illustrative offsets to the latest check-in, including exercise totals, reaction results, breathing, hydration and cabin CO₂, so you can see how indicators and body-system status may shift. A "Simulation · not real data" banner appears while any toggle is on. Nothing is saved, and the trend charts always show recorded data.
+- **Indicator score and streak** (Trends tab). A 0–100 daily indicator score (the average of per-indicator points: within range 100, monitor 60, attention 20) with its 7-day average, plus a check-in streak counting consecutive logged days up to today.
 
 ## Roadmap (planned, not implemented)
 

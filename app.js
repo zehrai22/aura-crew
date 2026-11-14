@@ -695,64 +695,8 @@
     var userCount = history.filter(function (e) { return e.source === 'user'; }).length;
     document.getElementById('log-count').textContent = history.length + ' days logged · ' + userCount + ' yours';
 
-    // System list
-    var list = document.getElementById('system-list');
-    list.innerHTML = '';
-    Object.keys(REGIONS).forEach(function (key) {
-      var s = regionStatus(key, latest);
-      var tw = regionTrendWatch(key, currentTrends);
-      var btn = el('button', { type: 'button', 'data-status': s }, [
-        el('span', { class: 'dot' }),
-        el('span', { class: 'name', text: REGIONS[key].name }),
-        tw.length ? el('span', { class: 'tw-badge', title: 'Trend watch: ' + tw.map(function (k) { return IND[k].short; }).join(', ') + ' (early-warning signal, not a diagnosis)', text: '◇ Trend' }) : null,
-        el('span', { class: 'st', text: CFG.statusText[s] })
-      ]);
-      btn.addEventListener('click', function () { openRegion(key, btn); });
-      list.appendChild(el('li', null, [btn]));
-    });
-
-    // Latest readings
-    var readings = document.getElementById('readings');
-    readings.innerHTML = '';
-    // Group by body system; an indicator shared by several systems appears under the first one.
-    // Vital signs have their own strip at the top, so they are not repeated here.
-    var shown = {};
-    CFG.vitals.forEach(function (t) { t.keys.forEach(function (k) { shown[k] = true; }); });
-    readings.appendChild(el('li', { class: 'r-note', text: 'Vital signs are shown at the top of the dashboard.' }));
-    var ordered = [];
-    Object.keys(REGIONS).forEach(function (rk) {
-      var keys = REGIONS[rk].indicators.filter(function (k) { return !shown[k]; });
-      keys.forEach(function (k) { shown[k] = true; });
-      if (keys.length) ordered.push({ region: rk, keys: keys });
-    });
-    INDICATOR_KEYS.forEach(function (k) { if (!shown[k]) { shown[k] = true; ordered.push({ region: null, keys: [k] }); } });
-    var groupOf = {};
-    ordered.forEach(function (g) { g.keys.forEach(function (k, i) { if (i === 0 && g.region) groupOf[k] = g.region; }); });
-    [].concat.apply([], ordered.map(function (g) { return g.keys; })).forEach(function (key) {
-      if (groupOf[key]) {
-        var rs = regionStatus(groupOf[key], latest);
-        readings.appendChild(el('li', { class: 'r-group', 'data-status': rs }, [
-          el('span', { class: 'dot' }), el('span', { text: REGIONS[groupOf[key]].name })
-        ]));
-      }
-      var spec = IND[key];
-      var v = latest ? latest[key] : null;
-      var s = evaluate(key, v);
-      var deltaText = readingNote(latest, key);
-      if (!deltaText && previous && v != null && previous[key] != null) {
-        var diff = v - previous[key];
-        var arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '■';
-        deltaText = arrow + ' ' + (diff > 0 ? '+' : '') + diff.toFixed(spec.decimals) + ' vs prev';
-      }
-      var valNode = el('span', { class: 'r-val', text: fmt(key, v) });
-      valNode.appendChild(el('small', { text: spec.unit }));
-      readings.appendChild(el('li', { 'data-status': s, title: CFG.statusText[s], class: currentTrends[key] && currentTrends[key].watch ? 'trend-watch' : '' }, [
-        el('span', { class: 'r-name', text: spec.label }),
-        valNode,
-        el('span', { class: 'r-ref' }, [document.createTextNode('Ref ' + fmtRef(key)), trendTag(key)]),
-        el('span', { class: 'r-delta', text: deltaText })
-      ]));
-    });
+    renderTrendsTab(history, latest, previous);
+    document.getElementById('sim-badge').hidden = !sim;
 
     renderVitals(history, latest);
     renderPlan(latest);
@@ -769,6 +713,150 @@
     return el('span', { class: 'r-trend' + (t.watch ? ' watch' : ''),
       title: TW.days + '-day trend: ' + words + (t.watch ? '. Trend watch: early-warning signal, not a diagnosis.' : '') },
       [document.createTextNode(' · ' + TW.days + ' d ' + ARROWS[t.dir] + (t.watch ? ' Trend watch' : ''))]);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Trends tab: system selector, one chart at a time, latest indicators,
+   * score & streak (rendered in render()), trend-watch list
+   * ------------------------------------------------------------------ */
+  var trendSystem = null;
+  var trendChartKey = null;
+  var VITAL_KEYS = {};
+  CFG.vitals.forEach(function (t) { t.keys.forEach(function (k) { VITAL_KEYS[k] = true; }); });
+
+  function renderTrendsTab(history, latest, previous) {
+    var regionKeys = Object.keys(REGIONS);
+    if (!trendSystem) {
+      // Start on the most severe system.
+      trendSystem = regionKeys.slice().sort(function (a, b) { return RANK[regionStatus(b, latest)] - RANK[regionStatus(a, latest)]; })[0];
+    }
+    var region = REGIONS[trendSystem];
+
+    // System selector (status dot + text label + trend-watch badge)
+    var list = document.getElementById('system-list');
+    list.innerHTML = '';
+    regionKeys.forEach(function (key) {
+      var st = regionStatus(key, latest);
+      var tw = regionTrendWatch(key, currentTrends);
+      var btn = el('button', { type: 'button', class: 'sys-chip', 'data-status': st, 'aria-pressed': String(key === trendSystem),
+        'aria-label': REGIONS[key].name + ', ' + CFG.statusText[st] + (tw.length ? ', trend watch' : '') }, [
+        el('span', { class: 'dot' }),
+        el('span', { class: 'name', text: REGIONS[key].name }),
+        el('span', { class: 'st', text: CFG.statusText[st] }),
+        tw.length ? el('span', { class: 'tw-badge', text: '◇ Trend' }) : null
+      ]);
+      btn.addEventListener('click', function () { trendSystem = key; trendChartKey = null; renderTrendsTab(getHistory(), currentEntry(getHistory()), null); });
+      list.appendChild(btn);
+    });
+    var active = list.querySelector('[aria-pressed="true"]');
+    if (active) list.scrollLeft = Math.max(0, active.offsetLeft - list.offsetLeft - 8);
+
+    // Chart: indicator chips + one chart + data table + link to the full panel
+    var view = document.getElementById('trend-view');
+    view.innerHTML = '';
+    var recent = history.slice(-30);
+    var chartKeys = region.indicators.concat(region.extraCharts || []);
+    if (!trendChartKey || chartKeys.indexOf(trendChartKey) < 0) trendChartKey = focusIndicator(trendSystem, latest, history);
+    var chips = el('div', { class: 'chart-chips', role: 'group', 'aria-label': 'Choose indicator' });
+    var box = el('div', { class: 'trend-chart' });
+    function draw() {
+      box.innerHTML = '';
+      box.appendChild(trendChart(trendChartKey, recent));
+      [].forEach.call(chips.children, function (c) { c.setAttribute('aria-pressed', String(c.dataset.k === trendChartKey)); });
+    }
+    chartKeys.forEach(function (k) {
+      var c = el('button', { type: 'button', class: 'chart-chip', 'data-k': k, 'data-status': latest ? evaluate(k, latest[k]) : 'unknown', text: IND[k].short });
+      c.addEventListener('click', function () { trendChartKey = k; draw(); });
+      chips.appendChild(c);
+    });
+    var open = el('button', { type: 'button', class: 'link-btn open-panel', text: 'Open ' + region.name + ' panel →' });
+    open.addEventListener('click', function () { openRegion(trendSystem, open); });
+    view.appendChild(chips);
+    view.appendChild(box);
+    view.appendChild(el('div', { class: 'trend-foot' }, [dataTable(chartKeys, recent), open]));
+    draw();
+
+    // Latest indicators for this system (vital signs are on the Overview strip, not repeated)
+    var readings = document.getElementById('readings');
+    readings.innerHTML = '';
+    var keys = region.indicators.filter(function (k) { return !VITAL_KEYS[k]; });
+    var skipped = region.indicators.filter(function (k) { return VITAL_KEYS[k]; });
+    if (skipped.length) readings.appendChild(el('li', { class: 'r-note', text: joinAnd(skipped.map(function (k) { return IND[k].short; })) + ': see the Vital signs strip on Overview.' }));
+    keys.forEach(function (key) {
+      var spec = IND[key];
+      var v = latest ? latest[key] : null;
+      var st = evaluate(key, v);
+      var deltaText = readingNote(latest, key);
+      if (!deltaText && previous && v != null && previous[key] != null) {
+        var diff = v - previous[key];
+        deltaText = (diff > 0 ? '▲ +' : diff < 0 ? '▼ ' : '■ ') + diff.toFixed(spec.decimals) + ' vs prev';
+      }
+      var valNode = el('span', { class: 'r-val', text: fmt(key, v) });
+      valNode.appendChild(el('small', { text: spec.unit }));
+      readings.appendChild(el('li', { 'data-status': st, title: CFG.statusText[st], class: currentTrends[key] && currentTrends[key].watch ? 'trend-watch' : '' }, [
+        el('span', { class: 'r-name', text: spec.label }), valNode,
+        el('span', { class: 'r-ref' }, [document.createTextNode('Ref ' + fmtRef(key)), trendTag(key)]),
+        el('span', { class: 'r-delta', text: deltaText })
+      ]));
+    });
+
+    // Trend watch list (all systems)
+    var tw = document.getElementById('tw-list');
+    tw.innerHTML = '';
+    var watches = Object.keys(currentTrends).map(function (k) { return currentTrends[k]; })
+      .filter(function (t) { return t.watch; }).sort(function (a, b) { return b.strength - a.strength; });
+    if (!watches.length) tw.appendChild(el('li', { class: 'meta', text: 'No trend-watch signals right now.' }));
+    watches.forEach(function (t) {
+      var rk = regionKeys.filter(function (r) { return REGIONS[r].indicators.indexOf(t.k) >= 0; })[0];
+      var b = el('button', { type: 'button', class: 'tw-item' }, [
+        el('span', { class: 'tw-badge', text: '◇ ' + REGIONS[rk].name }),
+        el('span', { text: trendSentence(t) })
+      ]);
+      b.addEventListener('click', function () { trendSystem = rk; trendChartKey = t.k; renderTrendsTab(getHistory(), currentEntry(getHistory()), null); });
+      tw.appendChild(el('li', null, [b]));
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Tabs (top on desktop, bottom bar on phone). Last tab kept in localStorage.
+   * ------------------------------------------------------------------ */
+  var TAB_KEY = 'aura-crew.tab.v1';
+  var TAB_IDS = ['overview', 'checkin', 'trends', 'about'];
+
+  function activateTab(id, opts) {
+    opts = opts || {};
+    if (TAB_IDS.indexOf(id) < 0) id = 'overview';
+    TAB_IDS.forEach(function (t) {
+      var btn = document.getElementById('tabbtn-' + t), panel = document.getElementById('tab-' + t);
+      var on = t === id;
+      btn.setAttribute('aria-selected', String(on));
+      btn.tabIndex = on ? 0 : -1;
+      panel.hidden = !on;
+    });
+    document.body.setAttribute('data-tab', id);
+    try { localStorage.setItem(TAB_KEY, id); } catch (e) { /* storage unavailable */ }
+    if (opts.focus) document.getElementById('tabbtn-' + id).focus();
+    if (opts.scroll !== false) window.scrollTo(0, 0);
+  }
+
+  function setupTabs() {
+    TAB_IDS.forEach(function (t, i) {
+      var btn = document.getElementById('tabbtn-' + t);
+      btn.addEventListener('click', function () { activateTab(t); });
+      btn.addEventListener('keydown', function (ev) {
+        var next = null;
+        if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') next = TAB_IDS[(i + 1) % TAB_IDS.length];
+        else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') next = TAB_IDS[(i + TAB_IDS.length - 1) % TAB_IDS.length];
+        else if (ev.key === 'Home') next = TAB_IDS[0];
+        else if (ev.key === 'End') next = TAB_IDS[TAB_IDS.length - 1];
+        if (next) { ev.preventDefault(); activateTab(next, { focus: true }); }
+      });
+    });
+    var saved = null;
+    try { saved = localStorage.getItem(TAB_KEY); } catch (e) { saved = null; }
+    activateTab(saved || 'overview', { scroll: false });
+    document.getElementById('sim-badge').addEventListener('click', function () { activateTab('about'); });
+    document.getElementById('rt-open-2').addEventListener('click', function (ev) { openReactionTest(ev.currentTarget); });
   }
 
   /* ------------------------------------------------------------------ *
@@ -1006,7 +1094,7 @@
     body.appendChild(btn);
     if (watches.length > 1) {
       body.appendChild(el('p', { class: 'meta plan-more', text: (watches.length - 1) + ' more trend-watch ' +
-        (watches.length === 2 ? 'signal' : 'signals') + ' in the indicator list.' }));
+        (watches.length === 2 ? 'signal' : 'signals') + ' on the Trends tab.' }));
     }
   }
 
@@ -1585,6 +1673,7 @@
     saveUserEntries();
     render();
     updateExerciseNote();
+    activateTab('overview');
     toast('Check-in recorded for ' + fmtDate(entry.date) + ' · overall: ' + CFG.statusText[overallStatus(getHistory().slice(-1)[0])]);
   });
 
@@ -1958,6 +2047,7 @@
   });
 
   renderBodyFigure();
+  setupTabs();
   setupForm();
   setupProfile();
   renderScenarios();

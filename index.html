@@ -22,204 +22,281 @@
     </div>
     <div class="topbar-meta">
       <span class="badge badge-synthetic" id="synthetic-badge" title="The history includes made-up demo entries from data.js">Synthetic demo data</span>
+      <button type="button" class="badge badge-sim" id="sim-badge" hidden>Simulation on</button>
       <span class="badge badge-muted">Decision support only</span>
     </div>
   </header>
 
-  <main class="layout">
-    <!-- Body figure -->
-    <!-- Vital signs strip -->
-    <section class="panel vitals-panel" id="vitals" aria-labelledby="vitals-title">
-      <div class="panel-head">
-        <h2 id="vitals-title">Vital signs</h2>
-        <span class="vitals-meta"><span class="status-chip" id="vitals-chip">—</span><span class="meta" id="vitals-date">—</span></span>
+  <nav class="tabbar" aria-label="Sections">
+    <div class="tabs" role="tablist" aria-label="AURA-CREW sections">
+      <button type="button" role="tab" class="tab" id="tabbtn-overview" data-tab="overview" aria-controls="tab-overview" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg><span class="tab-label">Overview</span><span class="tab-short">Overview</span>
+      </button>
+      <button type="button" role="tab" class="tab" id="tabbtn-checkin" data-tab="checkin" aria-controls="tab-checkin" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4v3h6V4M9 12l2 2 4-4"/></svg><span class="tab-label">Check-in</span><span class="tab-short">Check-in</span>
+      </button>
+      <button type="button" role="tab" class="tab" id="tabbtn-trends" data-tab="trends" aria-controls="tab-trends" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 15l4-4 3 3 5-6"/></svg><span class="tab-label">Trends</span><span class="tab-short">Trends</span>
+      </button>
+      <button type="button" role="tab" class="tab" id="tabbtn-about" data-tab="about" aria-controls="tab-about" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span class="tab-label">Simulate & About</span><span class="tab-short">More</span>
+      </button>
+    </div>
+  </nav>
+
+  <main class="tabs-main">
+    <!-- 1. Overview -->
+    <section class="tabpanel" id="tab-overview" role="tabpanel" aria-labelledby="tabbtn-overview" hidden>
+      <div class="tab-grid overview-grid">
+        <section class="panel vitals-panel" id="vitals" aria-labelledby="vitals-title">
+          <div class="panel-head">
+            <h2 id="vitals-title">Vital signs</h2>
+            <span class="vitals-meta"><span class="status-chip" id="vitals-chip">—</span><span class="meta" id="vitals-date">—</span></span>
+          </div>
+          <div class="vitals-row" id="vitals-row"></div>
+          <p class="vitals-alert" id="vitals-alert" role="alert" hidden></p>
+        </section>
+        <section class="panel plan-panel" id="plan" aria-labelledby="plan-title">
+          <div class="panel-head">
+            <h2 id="plan-title">Today's action plan</h2>
+            <span class="plan-tags"><span class="sim-tag" id="plan-sim" hidden>Simulated</span><span class="meta" id="plan-meta">—</span></span>
+          </div>
+          <div id="plan-body" aria-live="polite"></div>
+          <p class="plan-disclaimer">Decision support only, confirm with your medical officer.</p>
+        </section>
+        <section class="panel figure-panel" aria-labelledby="figure-title">
+          <div class="panel-head">
+            <h2 id="figure-title">Body systems</h2>
+            <span class="status-chip" id="overall-chip">—</span>
+          </div>
+          <div class="figure-wrap">
+            <svg id="body-svg" viewBox="-70 0 440 600" role="group" aria-label="Body systems figure. Select a system for details."></svg>
+            <div class="scanline" aria-hidden="true"></div>
+            <div class="sim-banner" id="sim-banner" hidden>Simulation · not real data</div>
+          </div>
+          <p class="hint">Select a body system to see what to do now.</p>
+          <div class="hz-legend" id="hz-legend" aria-label="Possible contributing hazards. Select one to highlight the body systems it may affect."></div>
+        </section>
       </div>
-      <div class="vitals-row" id="vitals-row"></div>
-      <p class="vitals-alert" id="vitals-alert" role="alert" hidden></p>
     </section>
 
-    <!-- Today's action plan: the main decision-support card -->
-    <section class="panel plan-panel" id="plan" aria-labelledby="plan-title">
-      <div class="panel-head">
-        <h2 id="plan-title">Today's action plan</h2>
-        <span class="plan-tags"><span class="sim-tag" id="plan-sim" hidden>Simulated</span><span class="meta" id="plan-meta">—</span></span>
+    <!-- 2. Check-in -->
+    <section class="tabpanel" id="tab-checkin" role="tabpanel" aria-labelledby="tabbtn-checkin" hidden>
+      <div class="tab-grid checkin-grid">
+        <section class="panel checkin-panel" aria-labelledby="checkin-title">
+          <div class="panel-head">
+            <h2 id="checkin-title">Daily check-in</h2>
+            <span class="meta" id="log-count">—</span>
+          </div>
+          <form id="checkin-form" novalidate>
+            <details class="field-wide profile">
+              <summary>Profile · height for BMI <em>one-time</em></summary>
+              <div class="profile-row">
+                <label class="field"><span>Height <em>cm</em></span><input type="number" id="profile-height" inputmode="numeric"></label>
+                <button type="button" class="btn btn-ghost" id="profile-save">Save</button>
+              </div>
+              <p class="field-note" id="profile-note">—</p>
+              <p class="field-note">Used only for BMI. Use your preflight height.</p>
+            </details>
+            <label class="field field-wide">
+              <span>Date</span>
+              <input type="date" name="date" required>
+            </label>
+            <fieldset class="field-group">
+              <legend>Blood pressure <em>mmHg</em></legend>
+              <label class="field"><span>Systolic</span><input type="number" name="systolic" inputmode="numeric" required></label>
+              <label class="field"><span>Diastolic</span><input type="number" name="diastolic" inputmode="numeric" required></label>
+            </fieldset>
+            <label class="field"><span>Heart rate <em>bpm</em></span><input type="number" name="heartRate" inputmode="numeric" required></label>
+            <label class="field"><span>Blood glucose <em>mg/dL</em></span><input type="number" name="glucose" inputmode="numeric" required></label>
+            <label class="field"><span>Body temp <em>°C</em></span><input type="number" name="temperature" inputmode="decimal" required></label>
+            <label class="field"><span>Sleep <em>hours</em></span><input type="number" name="sleep" inputmode="decimal" required></label>
+            <fieldset class="field-wide mood">
+              <legend>Mood <em>1 = very low · 5 = very good</em></legend>
+              <div class="mood-scale">
+                <label><input type="radio" name="mood" value="1"><span>1</span></label>
+                <label><input type="radio" name="mood" value="2"><span>2</span></label>
+                <label><input type="radio" name="mood" value="3"><span>3</span></label>
+                <label><input type="radio" name="mood" value="4"><span>4</span></label>
+                <label><input type="radio" name="mood" value="5"><span>5</span></label>
+              </div>
+            </fieldset>
+            <fieldset class="field-wide mood">
+              <legend>Dizziness / balance problems <em>self-check · past 24 h</em></legend>
+              <div class="mood-scale scale-4">
+                <label><input type="radio" name="dizziness" value="0"><span>0 <small>None</small></span></label>
+                <label><input type="radio" name="dizziness" value="1"><span>1 <small>Mild</small></span></label>
+                <label><input type="radio" name="dizziness" value="2"><span>2 <small>Moderate</small></span></label>
+                <label><input type="radio" name="dizziness" value="3"><span>3 <small>Severe</small></span></label>
+              </div>
+            </fieldset>
+            <fieldset class="field-wide mood">
+              <legend>Vision change <em>self-check · same text card daily</em></legend>
+              <div class="mood-scale scale-3">
+                <label><input type="radio" name="visionChange" value="0"><span>0 <small>None</small></span></label>
+                <label><input type="radio" name="visionChange" value="1"><span>1 <small>Slight</small></span></label>
+                <label><input type="radio" name="visionChange" value="2"><span>2 <small>Noticeable</small></span></label>
+              </div>
+              <p class="field-note">Self-checks, not a diagnosis. Severe dizziness or a noticeable change: contact your flight surgeon.</p>
+            </fieldset>
+            <fieldset class="field-group">
+              <legend>Breathing</legend>
+              <label class="field"><span>SpO₂ <em>%</em></span><input type="number" name="spo2" inputmode="numeric" required></label>
+              <label class="field"><span>Resp. rate <em>/min</em></span><input type="number" name="respRate" inputmode="numeric" required></label>
+              <label class="field field-wide"><span>Cabin CO₂ <em>ppm · optional, from the cabin display</em></span><input type="number" name="cabinCO2" inputmode="numeric" placeholder="not logged"></label>
+            </fieldset>
+            <fieldset class="field-group">
+              <legend>Hydration</legend>
+              <label class="field field-wide"><span>Fluid intake today <em>liters</em></span><input type="number" name="fluidIntake" inputmode="decimal" required></label>
+              <div class="field-wide">
+                <span class="scale-label">Urine color <em>1 = pale · 5 = amber</em></span>
+                <div class="mood-scale swatches" role="radiogroup" aria-label="Urine color, 1 pale to 5 amber">
+                  <label><input type="radio" name="urineColor" value="1"><span style="--sw:#f3f0c4">1</span></label>
+                  <label><input type="radio" name="urineColor" value="2"><span style="--sw:#f2e27a">2</span></label>
+                  <label><input type="radio" name="urineColor" value="3"><span style="--sw:#e9c93a">3</span></label>
+                  <label><input type="radio" name="urineColor" value="4"><span style="--sw:#d9a520">4</span></label>
+                  <label><input type="radio" name="urineColor" value="5"><span style="--sw:#b9781a">5</span></label>
+                </div>
+              </div>
+            </fieldset>
+            <fieldset class="field-group">
+              <legend>Nutrition</legend>
+              <label class="field"><span>Body mass <em>kg · optional</em></span><input type="number" name="bodyMass" inputmode="decimal" placeholder="not measured"></label>
+              <label class="field"><span>Calories today <em>kcal</em></span><input type="number" name="calories" inputmode="numeric" required></label>
+              <p class="field-note">Body mass from the mass-measurement device, on days it is measured.</p>
+            </fieldset>
+            <fieldset class="field-group">
+              <legend>Exercise today <em>minutes</em></legend>
+              <label class="field"><span>Resistive</span><input type="number" name="resistiveMin" inputmode="numeric" required></label>
+              <label class="field"><span>Aerobic</span><input type="number" name="aerobicMin" inputmode="numeric" required></label>
+              <p class="field-note" id="exercise-7d" aria-live="polite">—</p>
+            </fieldset>
+            <fieldset class="field-group">
+              <legend>Bone & kidney markers <em>optional · % vs preflight</em></legend>
+              <label class="field"><span>Urinary calcium</span><input type="number" name="urinaryCalcium" inputmode="numeric" placeholder="not measured"></label>
+              <label class="field"><span>Bone resorption</span><input type="number" name="boneResorption" inputmode="numeric" placeholder="not measured"></label>
+              <p class="field-note">Only when the medical team shares a new sample result.</p>
+            </fieldset>
+            <fieldset class="field-wide alertness-field">
+              <legend>Cognitive check <em>optional · reaction + memory, 2 min</em></legend>
+              <div class="rt-row">
+                <button type="button" class="btn btn-ghost" id="rt-open">Run cognitive check</button>
+                <span class="rt-summary" id="rt-summary">Not tested yet</span>
+                <button type="button" class="link-btn" id="rt-clear" hidden>Clear</button>
+              </div>
+              <input type="hidden" name="reactionMedian">
+              <input type="hidden" name="lapses">
+              <input type="hidden" name="memAccuracy">
+              <input type="hidden" name="memSpan">
+            </fieldset>
+            <p class="form-error" id="form-error" role="alert" hidden></p>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Record check-in</button>
+              <button type="button" class="btn btn-ghost" id="clear-user">Clear my entries</button>
+            </div>
+            <p class="fineprint">Saved only in this browser. Your entry replaces the synthetic one for that date.</p>
+          </form>
+        </section>
+        <aside class="panel cog-card" aria-labelledby="cog-card-title">
+          <div class="panel-head"><h2 id="cog-card-title">Cognitive check</h2></div>
+          <p class="cog-text">Two 1-minute parts: reaction and working memory. Compared with your own baseline, not an IQ test.</p>
+          <button type="button" class="btn btn-primary" id="rt-open-2">Start cognitive check</button>
+          <p class="meta">Results are added to today's check-in form. Record the check-in to save them.</p>
+        </aside>
       </div>
-      <div id="plan-body" aria-live="polite"></div>
-      <p class="plan-disclaimer">Decision support only, confirm with your medical officer.</p>
     </section>
 
-    <section class="panel figure-panel" aria-labelledby="figure-title">
-      <div class="panel-head">
-        <h2 id="figure-title">Body systems</h2>
-        <span class="status-chip" id="overall-chip">—</span>
-      </div>
-      <div class="figure-wrap">
-        <svg id="body-svg" viewBox="-70 0 440 600" role="group" aria-label="Body systems figure. Select a system for details."></svg>
-        <div class="scanline" aria-hidden="true"></div>
-        <div class="sim-banner" id="sim-banner" hidden>Simulation · not real data</div>
-      </div>
-      <p class="hint">Select a body system to see what to do now.</p>
-      <div class="hz-legend" id="hz-legend" aria-label="Possible contributing hazards. Select one to highlight the body systems it may affect."></div>
-      <div class="whatif" aria-labelledby="whatif-title">
-        <div class="whatif-head">
-          <h3 id="whatif-title">What-if scenarios</h3>
-          <button type="button" class="link-btn" id="whatif-reset" hidden>Reset</button>
-        </div>
-        <p class="meta">See how today's indicators may shift. Nothing is saved.</p>
-        <div class="whatif-toggles" id="whatif"></div>
-      </div>
-    </section>
-
-    <!-- Status + latest readings -->
-    <section class="panel status-panel" aria-labelledby="status-title">
-      <div class="panel-head">
-        <h2 id="status-title">Overall status</h2>
-        <span class="meta" id="latest-date">—</span>
-      </div>
-      <div class="overall-card" id="overall-card">
-        <div class="score-gauge" role="img" id="score-gauge" aria-label="Indicator score">
-          <svg viewBox="0 0 64 64" aria-hidden="true">
-            <circle class="gauge-track" cx="32" cy="32" r="27"></circle>
-            <circle class="gauge-arc" id="gauge-arc" cx="32" cy="32" r="27" pathLength="100"></circle>
-          </svg>
-          <span class="gauge-value" id="score-value">—</span>
-        </div>
-        <div>
-          <p class="overall-label" id="overall-label">—</p>
-          <p class="overall-text" id="overall-text">—</p>
-        </div>
-      </div>
-      <div class="stats">
-        <div class="stat">
-          <span class="stat-label">Indicator score</span>
-          <span class="stat-val" id="stat-score">—</span>
-          <span class="stat-sub" id="stat-score-sub">—</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Check-in streak</span>
-          <span class="stat-val" id="stat-streak">—</span>
-          <span class="stat-sub" id="stat-streak-sub">—</span>
-        </div>
-      </div>
-      <ul class="system-list" id="system-list"></ul>
-      <h3 class="subhead">Latest indicators</h3>
-      <ul class="readings" id="readings"></ul>
-    </section>
-
-    <!-- Daily check-in -->
-    <section class="panel checkin-panel" aria-labelledby="checkin-title">
-      <div class="panel-head">
-        <h2 id="checkin-title">Daily check-in</h2>
-        <span class="meta" id="log-count">—</span>
-      </div>
-      <form id="checkin-form" novalidate>
-        <details class="field-wide profile">
-          <summary>Profile · height for BMI <em>one-time</em></summary>
-          <div class="profile-row">
-            <label class="field"><span>Height <em>cm</em></span><input type="number" id="profile-height" inputmode="numeric"></label>
-            <button type="button" class="btn btn-ghost" id="profile-save">Save</button>
+    <!-- 3. Trends -->
+    <section class="tabpanel" id="tab-trends" role="tabpanel" aria-labelledby="tabbtn-trends" hidden>
+      <div class="tab-grid trends-grid">
+        <section class="panel trends-panel" aria-labelledby="trends-title">
+          <div class="panel-head">
+            <h2 id="trends-title">Trends by system</h2>
+            <span class="meta" id="latest-date">—</span>
           </div>
-          <p class="field-note" id="profile-note">—</p>
-          <p class="field-note">Used only for BMI. Use your preflight height.</p>
-        </details>
-        <label class="field field-wide">
-          <span>Date</span>
-          <input type="date" name="date" required>
-        </label>
-        <fieldset class="field-group">
-          <legend>Blood pressure <em>mmHg</em></legend>
-          <label class="field"><span>Systolic</span><input type="number" name="systolic" inputmode="numeric" required></label>
-          <label class="field"><span>Diastolic</span><input type="number" name="diastolic" inputmode="numeric" required></label>
-        </fieldset>
-        <label class="field"><span>Heart rate <em>bpm</em></span><input type="number" name="heartRate" inputmode="numeric" required></label>
-        <label class="field"><span>Blood glucose <em>mg/dL</em></span><input type="number" name="glucose" inputmode="numeric" required></label>
-        <label class="field"><span>Body temp <em>°C</em></span><input type="number" name="temperature" inputmode="decimal" required></label>
-        <label class="field"><span>Sleep <em>hours</em></span><input type="number" name="sleep" inputmode="decimal" required></label>
-        <fieldset class="field-wide mood">
-          <legend>Mood <em>1 = very low · 5 = very good</em></legend>
-          <div class="mood-scale">
-            <label><input type="radio" name="mood" value="1"><span>1</span></label>
-            <label><input type="radio" name="mood" value="2"><span>2</span></label>
-            <label><input type="radio" name="mood" value="3"><span>3</span></label>
-            <label><input type="radio" name="mood" value="4"><span>4</span></label>
-            <label><input type="radio" name="mood" value="5"><span>5</span></label>
-          </div>
-        </fieldset>
-        <fieldset class="field-wide mood">
-          <legend>Dizziness / balance problems <em>self-check · past 24 h</em></legend>
-          <div class="mood-scale scale-4">
-            <label><input type="radio" name="dizziness" value="0"><span>0 <small>None</small></span></label>
-            <label><input type="radio" name="dizziness" value="1"><span>1 <small>Mild</small></span></label>
-            <label><input type="radio" name="dizziness" value="2"><span>2 <small>Moderate</small></span></label>
-            <label><input type="radio" name="dizziness" value="3"><span>3 <small>Severe</small></span></label>
-          </div>
-        </fieldset>
-        <fieldset class="field-wide mood">
-          <legend>Vision change <em>self-check · same text card daily</em></legend>
-          <div class="mood-scale scale-3">
-            <label><input type="radio" name="visionChange" value="0"><span>0 <small>None</small></span></label>
-            <label><input type="radio" name="visionChange" value="1"><span>1 <small>Slight</small></span></label>
-            <label><input type="radio" name="visionChange" value="2"><span>2 <small>Noticeable</small></span></label>
-          </div>
-          <p class="field-note">Self-checks, not a diagnosis. Severe dizziness or a noticeable change: contact your flight surgeon.</p>
-        </fieldset>
-        <fieldset class="field-group">
-          <legend>Breathing</legend>
-          <label class="field"><span>SpO₂ <em>%</em></span><input type="number" name="spo2" inputmode="numeric" required></label>
-          <label class="field"><span>Resp. rate <em>/min</em></span><input type="number" name="respRate" inputmode="numeric" required></label>
-          <label class="field field-wide"><span>Cabin CO₂ <em>ppm · optional, from the cabin display</em></span><input type="number" name="cabinCO2" inputmode="numeric" placeholder="not logged"></label>
-        </fieldset>
-        <fieldset class="field-group">
-          <legend>Hydration</legend>
-          <label class="field field-wide"><span>Fluid intake today <em>liters</em></span><input type="number" name="fluidIntake" inputmode="decimal" required></label>
-          <div class="field-wide">
-            <span class="scale-label">Urine color <em>1 = pale · 5 = amber</em></span>
-            <div class="mood-scale swatches" role="radiogroup" aria-label="Urine color, 1 pale to 5 amber">
-              <label><input type="radio" name="urineColor" value="1"><span style="--sw:#f3f0c4">1</span></label>
-              <label><input type="radio" name="urineColor" value="2"><span style="--sw:#f2e27a">2</span></label>
-              <label><input type="radio" name="urineColor" value="3"><span style="--sw:#e9c93a">3</span></label>
-              <label><input type="radio" name="urineColor" value="4"><span style="--sw:#d9a520">4</span></label>
-              <label><input type="radio" name="urineColor" value="5"><span style="--sw:#b9781a">5</span></label>
+          <div class="system-selector" id="system-list" role="group" aria-label="Choose a body system"></div>
+          <div class="trend-view" id="trend-view"></div>
+          <h3 class="subhead">Latest indicators</h3>
+          <ul class="readings" id="readings"></ul>
+        </section>
+        <div class="trends-side">
+          <section class="panel score-panel" aria-labelledby="score-title">
+            <div class="panel-head"><h2 id="score-title">Score &amp; streak</h2></div>
+          <div class="overall-card" id="overall-card">
+            <div class="score-gauge" role="img" id="score-gauge" aria-label="Indicator score">
+              <svg viewBox="0 0 64 64" aria-hidden="true">
+                <circle class="gauge-track" cx="32" cy="32" r="27"></circle>
+                <circle class="gauge-arc" id="gauge-arc" cx="32" cy="32" r="27" pathLength="100"></circle>
+              </svg>
+              <span class="gauge-value" id="score-value">—</span>
+            </div>
+            <div>
+              <p class="overall-label" id="overall-label">—</p>
+              <p class="overall-text" id="overall-text">—</p>
             </div>
           </div>
-        </fieldset>
-        <fieldset class="field-group">
-          <legend>Nutrition</legend>
-          <label class="field"><span>Body mass <em>kg · optional</em></span><input type="number" name="bodyMass" inputmode="decimal" placeholder="not measured"></label>
-          <label class="field"><span>Calories today <em>kcal</em></span><input type="number" name="calories" inputmode="numeric" required></label>
-          <p class="field-note">Body mass from the mass-measurement device, on days it is measured.</p>
-        </fieldset>
-        <fieldset class="field-group">
-          <legend>Exercise today <em>minutes</em></legend>
-          <label class="field"><span>Resistive</span><input type="number" name="resistiveMin" inputmode="numeric" required></label>
-          <label class="field"><span>Aerobic</span><input type="number" name="aerobicMin" inputmode="numeric" required></label>
-          <p class="field-note" id="exercise-7d" aria-live="polite">—</p>
-        </fieldset>
-        <fieldset class="field-group">
-          <legend>Bone & kidney markers <em>optional · % vs preflight</em></legend>
-          <label class="field"><span>Urinary calcium</span><input type="number" name="urinaryCalcium" inputmode="numeric" placeholder="not measured"></label>
-          <label class="field"><span>Bone resorption</span><input type="number" name="boneResorption" inputmode="numeric" placeholder="not measured"></label>
-          <p class="field-note">Only when the medical team shares a new sample result.</p>
-        </fieldset>
-        <fieldset class="field-wide alertness-field">
-          <legend>Cognitive check <em>optional · reaction + memory, 2 min</em></legend>
-          <div class="rt-row">
-            <button type="button" class="btn btn-ghost" id="rt-open">Run cognitive check</button>
-            <span class="rt-summary" id="rt-summary">Not tested yet</span>
-            <button type="button" class="link-btn" id="rt-clear" hidden>Clear</button>
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-label">Indicator score</span>
+              <span class="stat-val" id="stat-score">—</span>
+              <span class="stat-sub" id="stat-score-sub">—</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Check-in streak</span>
+              <span class="stat-val" id="stat-streak">—</span>
+              <span class="stat-sub" id="stat-streak-sub">—</span>
+            </div>
           </div>
-          <input type="hidden" name="reactionMedian">
-          <input type="hidden" name="lapses">
-          <input type="hidden" name="memAccuracy">
-          <input type="hidden" name="memSpan">
-        </fieldset>
-        <p class="form-error" id="form-error" role="alert" hidden></p>
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary">Record check-in</button>
-          <button type="button" class="btn btn-ghost" id="clear-user">Clear my entries</button>
+          </section>
+          <section class="panel tw-panel" aria-labelledby="tw-title">
+            <div class="panel-head"><h2 id="tw-title">Trend watch</h2><span class="meta">14 days</span></div>
+            <ul class="tw-list" id="tw-list"></ul>
+            <p class="meta">Early-warning signal, not a diagnosis: still within range, but drifting the wrong way.</p>
+          </section>
         </div>
-        <p class="fineprint">Saved only in this browser. Your entry replaces the synthetic one for that date.</p>
-      </form>
+      </div>
+    </section>
+
+    <!-- 4. Simulate & About -->
+    <section class="tabpanel" id="tab-about" role="tabpanel" aria-labelledby="tabbtn-about" hidden>
+      <div class="tab-grid about-grid">
+        <section class="panel whatif-panel" aria-labelledby="whatif-title">
+        <div class="whatif">
+          <div class="whatif-head">
+            <h3 id="whatif-title">What-if scenarios</h3>
+            <button type="button" class="link-btn" id="whatif-reset" hidden>Reset</button>
+          </div>
+          <p class="meta">See how today's indicators may shift. Nothing is saved.</p>
+          <div class="whatif-toggles" id="whatif"></div>
+        </div>
+        </section>
+        <section class="panel synthetic-panel" aria-labelledby="synthetic-title">
+          <div class="panel-head"><h2 id="synthetic-title">Synthetic demo data</h2><span class="badge badge-synthetic">Synthetic</span></div>
+          <p>The 30-day history is made up for this demo. It is not real astronaut or patient data.</p>
+          <p class="meta">Your own check-ins are saved only in this browser and replace the synthetic entry for that date. Use "Clear my entries" on the Check-in tab to remove them.</p>
+        </section>
+        <section class="panel roadmap-panel" aria-labelledby="roadmap-title">
+          <div class="panel-head">
+            <h2 id="roadmap-title">Roadmap</h2>
+            <span class="badge badge-muted">Planned, not implemented</span>
+          </div>
+          <ol class="roadmap-list">
+            <li><strong>Wearable sensor input.</strong> Automatic readings from wearables such as the Canadian Space Agency's Bio-Monitor smart shirt (heart rate, ECG, breathing, skin temperature, oxygen saturation, activity).</li>
+            <li><strong>Lab marker inputs.</strong> Optional results from onboard or ground analysis.</li>
+            <li><strong>Commander and flight surgeon views.</strong> Role-based views with privacy controls.</li>
+            <li><strong>Threshold validation.</strong> Review of all thresholds with space medicine experts.</li>
+          </ol>
+        </section>
+        <section class="panel refs-panel" aria-labelledby="refs-title">
+          <div class="panel-head"><h2 id="refs-title">NASA HRP references</h2></div>
+          <ul class="refs">
+            <li><a href="https://www.nasa.gov/hrp/hazards/" target="_blank" rel="noopener">5 Hazards of Human Spaceflight</a></li>
+            <li><a href="https://humanresearchroadmap.nasa.gov/risks/" target="_blank" rel="noopener">Risks of Human Spaceflight</a></li>
+            <li><a href="https://www.nasa.gov/hrp/research/" target="_blank" rel="noopener">Ongoing HRP Research</a></li>
+          </ul>
+          <p class="meta">Full reference list in the README. Not affiliated with or endorsed by NASA.</p>
+        </section>
+      </div>
     </section>
   </main>
 
@@ -300,20 +377,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- Roadmap: planned, not implemented -->
-  <section class="roadmap" aria-labelledby="roadmap-title">
-    <div class="panel">
-      <div class="panel-head">
-        <h2 id="roadmap-title">Roadmap</h2>
-        <span class="badge badge-muted">Planned, not implemented</span>
-      </div>
-      <ol class="roadmap-list">
-        <li><strong>Wearable sensor input.</strong> Automatic readings from wearables such as the Canadian Space Agency's Bio-Monitor smart shirt (heart rate, ECG, breathing, skin temperature, oxygen saturation, activity).</li>
-        <li><strong>Lab marker inputs.</strong> Optional results from onboard or ground analysis.</li>
-        <li><strong>Commander and flight surgeon views.</strong> Role-based views with privacy controls.</li>
-        <li><strong>Threshold validation.</strong> Review of all thresholds with space medicine experts.</li>
-      </ol>
-    </div>
-  </section>
 
   <footer class="footer">
     <p>AURA-CREW is a NASA Space Apps 2026 prototype. It shows <strong>indicators</strong> for <strong>decision support only</strong>, not a diagnosis.</p>
