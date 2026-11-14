@@ -362,18 +362,39 @@
   var drawer = document.getElementById('drawer');
   var backdrop = document.getElementById('drawer-backdrop');
 
+  var CONTENT = window.AURA_CONTENT || { regions: {}, hazards: {} };
+  var DISCLAIMER = 'Decision support only, confirm with your medical officer.';
+
+  function section(title, children) {
+    return el('section', null, [el('h3', { text: title })].concat(children));
+  }
+
   function renderDrawer(key) {
     var history = getHistory();
     var latest = history[history.length - 1] || null;
     var region = REGIONS[key];
+    var content = CONTENT.regions[key] || {};
     var s = regionStatus(key, latest);
     document.getElementById('drawer-title').textContent = region.name;
     var body = document.getElementById('drawer-body');
+    var scroll = body.scrollTop;
     body.innerHTML = '';
 
-    var chip = el('span', { class: 'status-chip', 'data-status': s, text: CFG.statusText[s] });
-    body.appendChild(el('section', null, [chip]));
+    // Status line
+    body.appendChild(el('section', { class: 'drawer-status' }, [
+      el('span', { class: 'status-chip', 'data-status': s, text: CFG.statusText[s] }),
+      el('span', { class: 'meta', text: latest ? 'Latest check-in · ' + fmtDate(latest.date) : 'No check-in yet' })
+    ]));
 
+    // Red: flight surgeon note
+    if (s === 'red') {
+      body.appendChild(el('div', { class: 'alert', role: 'alert' }, [
+        el('strong', { text: 'Contact your flight surgeon.' }),
+        el('span', { text: ' One or more indicators for this system are outside the monitor range. Share the readings below with the medical team.' })
+      ]));
+    }
+
+    // Indicators used
     var ul = el('ul', { class: 'readings' });
     region.indicators.forEach(function (k) {
       var v = latest ? latest[k] : null;
@@ -387,7 +408,174 @@
         el('span', { class: 'r-delta' })
       ]));
     });
-    body.appendChild(el('section', null, [el('h3', { text: 'Indicators used' }), ul]));
+    body.appendChild(section('Indicators used', [ul]));
+
+    // What it does
+    if (content.what) body.appendChild(section('What this system does', [el('p', { text: content.what })]));
+
+    // Why spaceflight affects it
+    if (content.hazards) {
+      var hl = el('ul', { class: 'hazard-list' });
+      content.hazards.forEach(function (h) {
+        var hz = CONTENT.hazards[h.id] || { name: h.id };
+        hl.appendChild(el('li', null, [
+          el('a', { class: 'hazard-chip', href: '#hazard-' + h.id, 'data-hazard': h.id, text: hz.name }),
+          el('p', { text: h.why })
+        ]));
+      });
+      var src = el('p', { class: 'source' });
+      src.appendChild(document.createTextNode('Based on NASA HRP: '));
+      src.appendChild(el('a', { href: CONTENT.hazardsUrl, target: '_blank', rel: 'noopener', text: '5 Hazards of Human Spaceflight' }));
+      body.appendChild(section('Why spaceflight may affect it', [hl, src]));
+    }
+
+    // 30-day trend
+    var recent = history.slice(-30);
+    var charts = region.indicators.map(function (k) { return trendChart(k, recent); });
+    body.appendChild(section('30-day trend', charts.concat([dataTable(region.indicators, recent)])));
+
+    // How to measure it in space
+    if (content.measure) {
+      var ol = el('ol', { class: 'steps' });
+      content.measure.forEach(function (t) { ol.appendChild(el('li', { text: t })); });
+      body.appendChild(section('How to measure it in space', [ol]));
+    }
+
+    // Recommended actions
+    if (content.actions) {
+      var acts = content.actions[s] || content.actions.green;
+      var al = el('ul', { class: 'actions' });
+      acts.forEach(function (t) {
+        al.appendChild(el('li', null, [
+          el('span', { text: t + ' ' }),
+          el('em', { class: 'disclaimer', text: DISCLAIMER })
+        ]));
+      });
+      var actionKids = [al];
+      if (s === 'red') {
+        actionKids.unshift(el('p', { class: 'alert alert-inline', text: 'Contact your flight surgeon. ' + DISCLAIMER }));
+      }
+      body.appendChild(section('Recommended actions', actionKids));
+    }
+
+    body.scrollTop = scroll;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Trend chart (inline SVG, one small chart per indicator)
+   * ------------------------------------------------------------------ */
+  function trendChart(key, entries) {
+    var spec = IND[key];
+    var W = 460, H = 132, L = 40, R = 12, T = 12, B = 24;
+    var pts = entries.filter(function (e) { return e[key] != null && !isNaN(e[key]); });
+    var wrap = el('figure', { class: 'chart' });
+    var cap = el('figcaption', null, [
+      el('span', { text: spec.label }),
+      el('span', { class: 'meta', text: spec.unit + ' · ' + pts.length + ' days' })
+    ]);
+    wrap.appendChild(cap);
+    if (!pts.length) { wrap.appendChild(el('p', { class: 'meta', text: 'No data yet.' })); return wrap; }
+
+    var vals = pts.map(function (e) { return e[key]; });
+    var lo = Math.min.apply(null, vals.concat([spec.yellow[0]]));
+    var hi = Math.max.apply(null, vals.concat([spec.yellow[1]]));
+    var padY = (hi - lo) * 0.08 || 1;
+    lo -= padY; hi += padY;
+    var n = pts.length;
+    var x = function (i) { return n === 1 ? L + (W - L - R) / 2 : L + i * (W - L - R) / (n - 1); };
+    var y = function (v) { return T + (hi - v) * (H - T - B) / (hi - lo); };
+    var clampY = function (v) { return Math.max(T, Math.min(H - B, y(v))); };
+
+    var root = svg('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart-svg', role: 'img',
+      'aria-label': spec.label + ' over the last ' + n + ' days. Latest ' + fmt(key, vals[n - 1]) + ' ' + spec.unit +
+        ', reference range ' + fmtRange(key, spec.green) + '.' });
+
+    // Reference bands: yellow (monitor) under green (within range)
+    root.appendChild(svg('rect', { class: 'band band-yellow', x: L, width: W - L - R,
+      y: clampY(spec.yellow[1]), height: clampY(spec.yellow[0]) - clampY(spec.yellow[1]) }));
+    root.appendChild(svg('rect', { class: 'band band-green', x: L, width: W - L - R,
+      y: clampY(spec.green[1]), height: clampY(spec.green[0]) - clampY(spec.green[1]) }));
+
+    // Y labels at the green bounds, X labels at ends
+    [spec.green[0], spec.green[1]].forEach(function (v) {
+      root.appendChild(svg('line', { class: 'gridline', x1: L, x2: W - R, y1: y(v), y2: y(v) }));
+      root.appendChild(svg('text', { class: 'axis', x: L - 6, y: y(v) + 3, 'text-anchor': 'end', text: fmt(key, v) }));
+    });
+    root.appendChild(svg('text', { class: 'axis', x: L, y: H - 6, text: shortDate(pts[0].date) }));
+    root.appendChild(svg('text', { class: 'axis', x: W - R, y: H - 6, 'text-anchor': 'end', text: shortDate(pts[n - 1].date) }));
+
+    // Line
+    var d = pts.map(function (e, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(e[key]).toFixed(1); }).join(' ');
+    root.appendChild(svg('path', { class: 'trend-line', d: d }));
+
+    // Markers: out-of-range days, user entries, and the latest point
+    pts.forEach(function (e, i) {
+      var st = evaluate(key, e[key]);
+      var isLast = i === n - 1;
+      if (st === 'green' && !isLast && e.source !== 'user') return;
+      root.appendChild(svg('circle', { class: 'marker' + (e.source === 'user' ? ' user' : ''), 'data-status': st,
+        cx: x(i), cy: y(e[key]), r: isLast ? 5 : 4 }));
+    });
+
+    // Hover layer
+    var cross = svg('line', { class: 'crosshair', y1: T, y2: H - B, x1: 0, x2: 0, visibility: 'hidden' });
+    var dot = svg('circle', { class: 'hover-dot', r: 5, visibility: 'hidden' });
+    root.appendChild(cross);
+    root.appendChild(dot);
+    var hit = svg('rect', { x: L - 6, y: 0, width: W - L - R + 12, height: H, fill: 'transparent' });
+    root.appendChild(hit);
+    var tip = el('div', { class: 'chart-tip', hidden: '' });
+
+    function show(ev) {
+      var rect = root.getBoundingClientRect();
+      var px = (ev.clientX - rect.left) * W / rect.width;
+      var i = n === 1 ? 0 : Math.round((px - L) / ((W - L - R) / (n - 1)));
+      i = Math.max(0, Math.min(n - 1, i));
+      var e = pts[i], st = evaluate(key, e[key]);
+      cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+      dot.setAttribute('cx', x(i)); dot.setAttribute('cy', y(e[key])); dot.setAttribute('data-status', st); dot.setAttribute('visibility', 'visible');
+      tip.innerHTML = '';
+      tip.appendChild(el('strong', { text: fmt(key, e[key]) + ' ' + spec.unit }));
+      tip.appendChild(el('span', { text: fmtDate(e.date) + (e.source === 'synthetic' ? ' · synthetic' : ' · your entry') }));
+      tip.appendChild(el('span', { class: 'tip-status', 'data-status': st, text: CFG.statusText[st] }));
+      tip.hidden = false;
+      var left = x(i) / W * rect.width;
+      tip.style.left = Math.max(60, Math.min(rect.width - 60, left)) + 'px';
+    }
+    function hide() { cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); tip.hidden = true; }
+    hit.addEventListener('pointermove', show);
+    hit.addEventListener('pointerdown', show);
+    hit.addEventListener('pointerleave', hide);
+
+    var holder = el('div', { class: 'chart-holder' }, [root, tip]);
+    wrap.appendChild(holder);
+    return wrap;
+  }
+
+  function shortDate(iso) {
+    var p = iso.split('-');
+    return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  function dataTable(keys, entries) {
+    var table = el('table', { class: 'data-table' });
+    var head = el('tr', null, [el('th', { scope: 'col', text: 'Date' })]);
+    keys.forEach(function (k) { head.appendChild(el('th', { scope: 'col', text: IND[k].short + ' (' + IND[k].unit + ')' })); });
+    table.appendChild(el('thead', null, [head]));
+    var tb = el('tbody');
+    entries.slice().reverse().forEach(function (e) {
+      var tr = el('tr', null, [el('th', { scope: 'row', text: shortDate(e.date) + (e.source === 'user' ? ' •' : '') })]);
+      keys.forEach(function (k) {
+        tr.appendChild(el('td', { 'data-status': evaluate(k, e[k]), text: fmt(k, e[k]) }));
+      });
+      tb.appendChild(tr);
+    });
+    table.appendChild(tb);
+    return el('details', { class: 'table-view' }, [
+      el('summary', { text: 'Show data table' }),
+      el('div', { class: 'table-scroll' }, [table]),
+      el('p', { class: 'meta', text: '• = your entry. Other rows are synthetic demo data.' })
+    ]);
   }
 
   function openRegion(key, trigger) {

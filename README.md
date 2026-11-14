@@ -12,7 +12,7 @@ An astronaut records a short daily check-in. AURA-CREW compares each reading wit
 
 - **Daily check-in** with blood pressure (systolic and diastolic), resting heart rate, blood glucose (mg/dL), body temperature, sleep hours and mood (1–5). A new entry updates the whole app right away. Entries are kept in your browser's `localStorage`, and an entry for a date replaces the synthetic entry for that date.
 - **Interactive 2D body figure** with five clickable systems: brain and mind, heart and cardiovascular, immune system, metabolism, and bones and muscle. Each one turns green (within range), yellow (monitor) or red (attention) based on the latest indicators it depends on. The overall status is shown alongside.
-- **Region panel** listing the indicators behind each system's status.
+- **Region panel** for each system. It covers what the system does and why spaceflight may affect it, linked to the five NASA HRP hazards. It also has a 30-day trend chart per indicator (with reference bands, a hover tooltip and a data table), how to measure the indicators in space, and 2–3 recommended actions that depend on the current status. A red status adds a "Contact your flight surgeon" note. Every recommendation ends with "Decision support only, confirm with your medical officer."
 
 ## Project structure
 
@@ -22,7 +22,7 @@ An astronaut records a short daily check-in. AURA-CREW compares each reading wit
 | `style.css` | Holographic HUD styling, responsive layout, animations |
 | `app.js` | Status logic, SVG body figure, check-in form, region panel |
 | `config.js` | **All thresholds** and the indicator-to-system mapping (marked *ASSUMPTION*) |
-| `data.js` | 30 days of **synthetic** demo history (seeded and reproducible) |
+| `data.js` | 30 days of **synthetic** demo history (seeded and reproducible), plus the panel text and hazard content |
 
 There is no build step, no backend and no dependencies.
 
