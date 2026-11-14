@@ -650,3 +650,10 @@ button.hz-tag[aria-pressed="true"] { background: rgba(61, 232, 255, .2); box-sha
 .region { transition: opacity .3s var(--ease); }
 .region.dimmed { opacity: .22; }
 .panel-disclaimer { margin: 6px 0 0 !important; font-size: .74rem !important; font-style: italic; color: var(--text-dim) !important; }
+
+/* ---------- Roadmap ---------- */
+.roadmap { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; padding: 10px clamp(16px, 3vw, 32px) 0; }
+.roadmap .panel { border-style: dashed; }
+.roadmap-list { margin: 0; padding-left: 22px; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); column-gap: 32px; font-size: .86rem; color: var(--text-dim); }
+.roadmap-list li::marker { color: var(--cyan); font-family: var(--mono); }
+.roadmap-list strong { color: var(--text); font-weight: 600; }

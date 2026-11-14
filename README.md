@@ -54,6 +54,13 @@ An astronaut records a short daily check-in. AURA-CREW tells them what to do now
 - **What-if scenarios.** Four toggles (skip exercise, sleep deficit, radiation event, spacewalk day) apply illustrative offsets to the latest check-in, including exercise totals, reaction results, breathing, hydration and cabin CO₂, so you can see how indicators and body-system status may shift. A "Simulation · not real data" banner appears while any toggle is on. Nothing is saved, and the trend charts always show recorded data.
 - **Indicator score and streak.** A 0–100 daily indicator score (the average of per-indicator points: within range 100, monitor 60, attention 20) with its 7-day average, plus a check-in streak counting consecutive logged days up to today.
 
+## Roadmap (planned, not implemented)
+
+1. **Wearable sensor input.** Automatic readings from wearables such as the Canadian Space Agency's Bio-Monitor smart shirt (heart rate, ECG, breathing, skin temperature, oxygen saturation, activity).
+2. **Lab marker inputs.** Optional results from onboard or ground analysis.
+3. **Commander and flight surgeon views.** Role-based views with privacy controls.
+4. **Threshold validation.** Review of all thresholds with space medicine experts.
+
 ## Project structure
 
 | File | Purpose |
