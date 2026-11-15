@@ -310,7 +310,7 @@
     }
     if (entry._asof && entry._asof[k]) return 'Measured ' + shortDate(entry._asof[k]);
     if (spec.levels && entry[k] != null && spec.levels[entry[k]]) return spec.levels[entry[k]];
-    if (spec.optional && (entry[k] == null || isNaN(entry[k]))) return 'Optional · not measured';
+    if (spec.optional && (entry[k] == null || isNaN(entry[k]))) return 'Not measured';
     return '';
   }
   function fmtDate(iso) {
@@ -623,7 +623,7 @@
         var d = sc.deltas[k];
         return IND[k].short + ' ' + (d > 0 ? '+' : '') + d;
       }).join(' · ');
-      var btn = el('button', { type: 'button', class: 'whatif-toggle', 'aria-pressed': String(on), title: deltas }, [
+      var btn = el('button', { type: 'button', class: 'whatif-toggle', 'aria-pressed': String(on) }, [
         el('span', { class: 'switch', 'aria-hidden': 'true' }),
         el('span', { class: 'wt-text' }, [
           el('strong', { text: sc.label }),
@@ -677,7 +677,7 @@
     document.getElementById('overall-label').textContent = CFG.statusText[overall];
     document.getElementById('overall-text').textContent = OVERALL_COPY[overall];
     document.getElementById('latest-date').textContent = latest
-      ? 'Latest · ' + fmtDate(latest.date) + (latest.source === 'synthetic' ? ' · synthetic' : ' · your entry') + (sim ? ' · simulated' : '')
+      ? 'Latest · ' + fmtDate(latest.date) + (latest.source === 'user' ? ' · your entry' : '')
       : '—';
 
     // Score + streak
@@ -688,10 +688,10 @@
     document.getElementById('gauge-arc').style.strokeDasharray = (score || 0) + ' 100';
     document.getElementById('score-gauge').setAttribute('aria-label', 'Indicator score ' + (score == null ? 'not available' : score + ' out of 100'));
     document.getElementById('stat-score').textContent = score == null ? '—' : score + ' / 100';
-    document.getElementById('stat-score-sub').textContent = avg == null ? '' : (sim ? 'Simulated · 7-day avg ' + avg + ' recorded' : '7-day avg ' + avg);
+    document.getElementById('stat-score-sub').textContent = avg == null ? '' : '7-day avg ' + avg;
     var stk = streak(history);
     document.getElementById('stat-streak').textContent = stk.days + (stk.days === 1 ? ' day' : ' days');
-    document.getElementById('stat-streak-sub').textContent = stk.days === 0 ? 'Check in today to start' : (stk.synthetic ? 'Includes synthetic days' : 'Keep it going');
+    document.getElementById('stat-streak-sub').textContent = stk.days === 0 ? 'Check in today to start' : 'Consecutive days';
     var userCount = history.filter(function (e) { return e.source === 'user'; }).length;
     document.getElementById('log-count').textContent = history.length + ' days logged · ' + userCount + ' yours';
 
@@ -711,7 +711,7 @@
     if (!t) return null;
     var words = { up: 'rising', down: 'falling', flat: 'steady' }[t.dir];
     return el('span', { class: 'r-trend' + (t.watch ? ' watch' : ''),
-      title: TW.days + '-day trend: ' + words + (t.watch ? '. Trend watch: early-warning signal, not a diagnosis.' : '') },
+      title: TW.days + '-day trend: ' + words },
       [document.createTextNode(' · ' + TW.days + ' d ' + ARROWS[t.dir] + (t.watch ? ' Trend watch' : ''))]);
   }
 
@@ -909,10 +909,10 @@
       var valueText = vals.every(function (v) { return v == null; }) ? '—' : t.keys.map(function (k, i) { return fmt(k, vals[i]); }).join('/');
       var spark = sparkline(t.keys, history);
       var tile = el('button', { type: 'button', class: 'vital', 'data-status': st,
-        'aria-label': t.label + ': ' + valueText + ' ' + unit + ', ' + CFG.statusText[st] + (sim ? ', simulated' : '') + '. Opens the ' + REGIONS[t.region].name + ' panel.' }, [
+        'aria-label': t.label + ': ' + valueText + ' ' + unit + ', ' + CFG.statusText[st] + '. Opens the ' + REGIONS[t.region].name + ' panel.' }, [
         el('span', { class: 'vital-label', text: t.label }),
         el('span', { class: 'vital-value' }, [document.createTextNode(valueText), el('small', { text: unit })]),
-        el('span', { class: 'vital-status' }, [el('span', { class: 'dot' }), document.createTextNode(CFG.statusText[st] + (sim ? ' · simulated' : ''))]),
+        el('span', { class: 'vital-status' }, [el('span', { class: 'dot' }), document.createTextNode(CFG.statusText[st])]),
         spark || el('span', { class: 'spark-empty', text: 'Not enough data for 7 days' }),
         el('span', { class: 'vital-sub', text: 'Ref ' + t.keys.map(fmtRef).join(' / ') })
       ]);
@@ -922,14 +922,14 @@
     var overall = worst(statuses);
     var chip = document.getElementById('vitals-chip');
     chip.setAttribute('data-status', overall);
-    chip.textContent = 'Vital signs: ' + VITAL_WORDS[overall] + (sim ? ' · simulated' : '');
+    chip.textContent = 'Vital signs: ' + VITAL_WORDS[overall];
     document.getElementById('vitals-date').textContent = latest ? fmtDate(latest.date) + ' · ' + CFG.vitalsSparkDays + '-day trend' : '';
     var alertBox = document.getElementById('vitals-alert');
     alertBox.hidden = overall !== 'red';
     alertBox.innerHTML = '';
     if (overall === 'red') {
       alertBox.appendChild(el('strong', { text: 'Contact your flight surgeon. ' }));
-      alertBox.appendChild(document.createTextNode(joinAnd(reds) + (reds.length === 1 ? ' is' : ' are') + ' outside the monitor range' + (sim ? ' (simulated).' : '.')));
+      alertBox.appendChild(document.createTextNode(joinAnd(reds) + (reds.length === 1 ? ' is' : ' are') + ' outside the monitor range.'));
     }
   }
 
@@ -1001,9 +1001,7 @@
     var reds = [];
     INDICATOR_KEYS.forEach(function (k) {
       if (evaluate(k, entry[k]) !== 'red') return;
-      var names = order.filter(function (rk) { return REGIONS[rk].indicators.indexOf(k) >= 0; })
-        .map(function (rk) { return REGIONS[rk].name.toLowerCase(); });
-      reds.push(indicatorPhrase(k, entry[k]) + (names.length ? ' (' + names.join(', ') + ')' : ''));
+      reds.push(indicatorPhrase(k, entry[k], reds.length > 0));
     });
     return { items: items.slice(0, PLAN_SIZE), total: items.length, reds: reds, systems: systems };
   }
@@ -1011,7 +1009,6 @@
   function renderPlan(latest) {
     var body = document.getElementById('plan-body');
     var sim = !!(latest && latest.simulated);
-    document.getElementById('plan-sim').hidden = !sim;
     document.getElementById('plan-meta').textContent = latest ? 'From ' + fmtDate(latest.date) + ' check-in' : '';
     body.innerHTML = '';
 
@@ -1021,9 +1018,6 @@
     }
     var plan = buildPlan(latest);
 
-    if (sim) {
-      body.appendChild(el('p', { class: 'sim-note', text: 'Simulated: includes what-if offsets.' }));
-    }
 
     if (plan.reds.length) {
       var shown = plan.reds.slice(0, 3);
@@ -1082,12 +1076,12 @@
     var rk = Object.keys(REGIONS).filter(function (r) { return REGIONS[r].indicators.indexOf(t.k) >= 0; })[0];
     var advice = (CONTENT.trendAdvice && CONTENT.trendAdvice[t.k]) || 'Consider reviewing your routine';
     var text = trendSentence(t) + ' ' + advice + ', and mention it at your next medical check.';
-    var btn = el('button', { type: 'button', class: 'plan-item plan-trend', 'aria-label': 'Trend watch. ' + text + ' Early-warning signal, not a diagnosis.' }, [
+    var btn = el('button', { type: 'button', class: 'plan-item plan-trend', 'aria-label': 'Trend watch. ' + text }, [
       el('span', { class: 'plan-action', text: text }),
       el('span', { class: 'plan-why' }, [
         el('span', { class: 'tw-badge', text: '◇ Trend watch' }),
         el('span', { class: 'plan-sys', text: REGIONS[rk].name }),
-        el('span', { text: 'Early-warning signal, not a diagnosis. Latest ' + indicatorPhrase(t.k, latest[t.k], true) + ' is still within range.' })
+        el('span', { text: 'Latest ' + indicatorPhrase(t.k, latest[t.k], true) + ' is still in range.' })
       ])
     ]);
     btn.addEventListener('click', function () { openRegion(rk, btn); });
@@ -1111,7 +1105,7 @@
     box.appendChild(el('span', { class: 'hz-tags-label', text: 'Possible contributing hazards' }));
     Object.keys(CONTENT.hazards).forEach(function (id) {
       var hz = CONTENT.hazards[id];
-      var mayAffect = joinAnd(hz.indicators.slice(0, 5).map(function (k) { return IND[k].short.toLowerCase().replace(/^spo₂/, 'SpO₂').replace(/^bp/, 'BP'); }));
+      var mayAffect = joinAnd(hz.indicators.slice(0, 3).map(function (k) { return (/^[A-Z][a-z]+(\s|$)/.test(IND[k].short) ? IND[k].short.charAt(0).toLowerCase() + IND[k].short.slice(1) : IND[k].short); }));
       var btn = el('button', { type: 'button', class: 'hz-tag', 'data-hazard': id, 'aria-pressed': String(hazardFocus === id),
         title: hz.summary + ' May affect ' + mayAffect + '.', text: hz.short });
       btn.addEventListener('click', function () {
@@ -1237,7 +1231,7 @@
     // 1. Status chip + one-line summary
     body.appendChild(el('section', { class: 'p-status' }, [
       el('span', { class: 'status-chip', 'data-status': s, text: CFG.statusText[s] }),
-      el('span', { class: 'p-summary', text: statusSummary(key, latest, s) + (latest && latest.simulated ? ' (simulated)' : '') })
+      el('span', { class: 'p-summary', text: statusSummary(key, latest, s) })
     ]));
 
     // 2. What to do now
@@ -1282,9 +1276,9 @@
     if (content.research) more.push(el('h4', { text: 'Research shows' }), el('p', { text: content.research }));
     if (content.measure) more.push(el('h4', { text: 'How to measure' }), el('p', { text: content.measure }));
     if (content.performance) {
-      var testBtn = el('button', { type: 'button', class: 'btn btn-ghost', text: 'Run 2-minute cognitive check' });
+      var testBtn = el('button', { type: 'button', class: 'btn btn-ghost', text: 'Run cognitive check' });
       testBtn.addEventListener('click', function () { openReactionTest(testBtn); });
-      more.push(el('p', { class: 'meta', text: content.performance.about }), testBtn);
+      more.push(testBtn);
     }
     // Notes: cognitive check, trend watch, BMI
     var notes = [];
@@ -1295,12 +1289,12 @@
       if (lapStatus === 'yellow' || lapStatus === 'red') notes.push(el('p', { class: 'alertness-note warn', text: content.alertness }));
     }
     regionTrendWatch(key, currentTrends).forEach(function (k) {
-      notes.push(el('p', { class: 'tw-note', text: '◇ Trend watch: ' + trendSentence(currentTrends[k]) + ' Early-warning signal, not a diagnosis.' }));
+      notes.push(el('p', { class: 'tw-note', text: '◇ Trend watch: ' + trendSentence(currentTrends[k]) }));
     });
     if (key === 'metabolism') {
       var mb = massBaseline(history, latest);
       var bmi = mb ? bmiFor(mb.latest.bodyMass) : null;
-      notes.push(el('p', { class: 'meta', text: bmi ? 'BMI ' + bmi + ' (reference only' + (profile.source === 'synthetic' ? ', synthetic height' : '') + ').' : 'Add your height in the profile to see BMI.' }));
+      notes.push(el('p', { class: 'meta', text: bmi ? 'BMI ' + bmi + (profile.source === 'synthetic' ? ' (demo height).' : '.') : 'Add your height in the profile to see BMI.' }));
     }
     if (notes.length) more.push(el('h4', { text: 'Notes' })), more.push.apply(more, notes);
     // All readings
@@ -1341,7 +1335,7 @@
       el('span', { class: 'meta', text: spec.unit + ' · ' + pts.length + (pts.length === 1 ? ' reading' : ' readings') })
     ]);
     wrap.appendChild(cap);
-    if (!pts.length) { wrap.appendChild(el('p', { class: 'meta', text: spec.optional ? 'Not measured in this period (optional).' : 'No data yet.' })); return wrap; }
+    if (!pts.length) { wrap.appendChild(el('p', { class: 'meta', text: spec.optional ? 'Not measured yet.' : 'No data yet.' })); return wrap; }
 
     // Y domain from the data plus any band edges that are not open-ended.
     var lim = spec.input;
@@ -1424,7 +1418,7 @@
       dot.setAttribute('cx', x(best.i)); dot.setAttribute('cy', y(e[key])); dot.setAttribute('data-status', st); dot.setAttribute('visibility', 'visible');
       tip.innerHTML = '';
       tip.appendChild(el('strong', { text: withUnit(key, e[key]) + (spec.levels && spec.levels[e[key]] ? ' · ' + spec.levels[e[key]] : '') }));
-      tip.appendChild(el('span', { text: fmtDate(e.date) + (e.source === 'synthetic' ? ' · synthetic' : ' · your entry') }));
+      tip.appendChild(el('span', { text: fmtDate(e.date) + (e.source === 'user' ? ' · your entry' : '') }));
       tip.appendChild(el('span', { class: 'tip-status', 'data-status': st, text: CFG.statusText[st] }));
       tip.hidden = false;
       var left = x(best.i) / W * rect.width;
@@ -1463,7 +1457,7 @@
     return el('details', { class: 'table-view' }, [
       el('summary', { text: 'Show data table' }),
       el('div', { class: 'table-scroll' }, [table]),
-      el('p', { class: 'meta', text: '• = your entry. Other rows are synthetic demo data. Exercise columns are 7-day totals; bone markers appear only on days they were measured.' })
+      el('p', { class: 'meta', text: '• = your entry.' })
     ]);
   }
 
@@ -1601,9 +1595,9 @@
     input.min = lim.min; input.max = lim.max; input.step = lim.step;
     function show() {
       input.value = profile.source === 'user' ? profile.height : '';
-      input.placeholder = profile.source === 'synthetic' ? profile.height + ' (synthetic demo)' : 'cm';
+      input.placeholder = profile.source === 'synthetic' ? profile.height + ' (demo)' : 'cm';
       note.textContent = profile.source === 'user' ? 'Saved in this browser: ' + profile.height + ' cm.'
-        : profile.source === 'synthetic' ? 'Using a synthetic demo height until you save your own.' : 'Not set.';
+        : profile.source === 'synthetic' ? 'Demo height in use.' : 'Not set.';
     }
     document.getElementById('profile-save').addEventListener('click', function () {
       var v = parseFloat(input.value);
@@ -1613,7 +1607,7 @@
       profile = loadProfile();
       show();
       render();
-      toast('Height saved. It is used only to show BMI.');
+      toast('Height saved.');
     });
     show();
   }
@@ -1732,7 +1726,7 @@
       node.className = 'alertness-note';
       node.textContent = building
         ? 'Your first ' + CFG.cognitive.baselineTests + ' checks set your personal baseline.'
-        : 'Within 15% of your own baseline.';
+        : 'Within 15% of your baseline.';
     }
   }
 
@@ -2025,7 +2019,7 @@
     userEntries = [];
     saveUserEntries();
     render();
-    toast('Your entries were cleared. Showing synthetic demo data.');
+    toast('Your entries were cleared.');
   });
 
   var toastTimer;

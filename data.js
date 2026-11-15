@@ -164,19 +164,19 @@ window.AURA_CONTENT = {
   // `indicators`: daily indicators each hazard MAY affect (used for the legend tooltips and highlights).
   hazards: {
     radiation: { name: 'Space radiation', short: 'Radiation',
-      summary: 'Higher radiation beyond Earth\'s protection may affect the nervous system, immune cells and blood vessels over time.',
+      summary: 'Higher radiation may affect nerves, immune cells and blood vessels.',
       indicators: ['mood', 'sleep', 'perfReaction', 'perfMemory', 'visionChange', 'temperature', 'systolic', 'diastolic', 'boneResorption'] },
     isolation: { name: 'Isolation and confinement', short: 'Isolation',
-      summary: 'Months with a small crew in a small space may affect mood, sleep, stress and task performance.',
+      summary: 'A small crew in a small space may affect mood, sleep and stress.',
       indicators: ['mood', 'sleep', 'perfReaction', 'perfMemory', 'lapses', 'heartRate', 'systolic', 'diastolic', 'glucose', 'calories7d'] },
     distance: { name: 'Distance from Earth', short: 'Distance',
-      summary: 'Communication delays and limited care and resupply make early self-monitoring more important.',
+      summary: 'Delays and limited care make early self-monitoring more important.',
       indicators: ['mood', 'sleep', 'lapses', 'fluidIntake', 'calories7d', 'urinaryCalcium'] },
     gravity: { name: 'Gravity fields', short: 'Gravity',
-      summary: 'Weightlessness and gravity transitions may affect balance, vision, fluids, bone and muscle.',
+      summary: 'Gravity changes may affect balance, vision, fluids, bone and muscle.',
       indicators: ['dizziness', 'visionChange', 'systolic', 'diastolic', 'heartRate', 'glucose', 'massChange7d', 'urinaryCalcium', 'urineColor', 'resistive7d', 'aerobic7d', 'boneResorption'] },
     environment: { name: 'Hostile and closed environments', short: 'Closed environment',
-      summary: 'Cabin air, CO₂, noise, light, water and microbes all depend on life support and may affect the crew.',
+      summary: 'Cabin air, CO₂, noise and microbes may affect the crew.',
       indicators: ['spo2', 'respRate', 'cabinCO2', 'sleep', 'mood', 'perfReaction', 'perfMemory', 'lapses', 'temperature', 'fluidIntake', 'calories7d', 'resistive7d'] }
   },
 
@@ -265,9 +265,8 @@ window.AURA_CONTENT = {
       hazards: ['gravity', 'isolation', 'environment', 'distance', 'radiation'],
       alertness: 'Low alertness can signal fatigue; consider rest and contact your flight surgeon.',
       performance: {
-        yellow: 'Task performance may be slightly reduced compared with your own baseline. Consider rest and repeating the check tomorrow.',
-        red: 'Task performance may be reduced. Consider rest and contact your flight surgeon.',
-        about: 'A performance check against your own baseline, not an IQ test.'
+        yellow: 'Task performance may be slightly reduced. Consider rest and repeating the check tomorrow.',
+        red: 'Task performance may be reduced. Consider rest and contact your flight surgeon.'
       }
     },
     heart: {

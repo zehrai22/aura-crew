@@ -17,7 +17,17 @@ The app is split into four tabs, so no tab needs long scrolling. Tabs sit at the
 3. **Trends:** a system selector at the top, then for the selected system one chart at a time (indicator chips switch charts), its data table, a link to the full system panel and its latest indicators. Alongside are the indicator score and check-in streak, plus the trend-watch list (tap a signal to open its chart).
 4. **Simulate & About:** what-if scenarios, the synthetic demo data note, the roadmap and the NASA HRP references.
 
-While a what-if scenario is on, a "Simulation on" badge shows in the header on every tab; tapping it opens Simulate & About.
+While a what-if scenario is on, a "Simulation, not real data" label shows in the header on every tab (tapping it opens Simulate & About) and on the body figure.
+
+## Interface text
+
+The interface uses short, plain text: at most two short sentences per item, with no repeated disclaimers or developer notes on screen. It keeps only these fixed notices:
+- the "Synthetic demo data" badge
+- the "Simulation, not real data" label while a what-if is on
+- the "Contact your flight surgeon" notes
+- one "Decision support only, confirm with your medical officer." line per panel (each body-system panel and Today's action plan).
+
+Background and caveats, such as the cognitive check being a performance check rather than a clinical test, and the dizziness and vision items being self-checks, are documented in this README rather than repeated in the UI.
 
 ## Features
 
@@ -26,14 +36,14 @@ While a what-if scenario is on, a "Simulation on" badge shows in the header on e
   - Blood pressure shows systolic/diastolic on one tile and takes the worse status of the two.
   - One overall chip reads "Vital signs: stable" (all green), "monitor" (any yellow) or "attention" (any red). On attention, a "Contact your flight surgeon" note names the values outside the monitor range.
   - Tapping a tile opens the related body-system panel (temperature → immune, heart rate and blood pressure → cardiovascular, respiratory rate and SpO₂ → respiratory).
-  - It uses the same check-in data and `config.js` thresholds (no new inputs), updates live with new check-ins and what-if toggles, and says "simulated" while a scenario is on.
+  - It uses the same check-in data and `config.js` thresholds (no new inputs), updates live with new check-ins and what-if toggles.
   - These five values are not repeated in the "Latest indicators" list on the Trends tab. On phones the tiles scroll horizontally.
 - **Today's action plan** (the main decision-support card, on the Overview tab). It collects actions from all seven body systems and ranks them: red before yellow, then by the most severe system. It shows the top 3 as a numbered list.
   - Actions are grouped by related indicators (for example rest = sleep + mood, hydration = fluid intake + urine color), so a shared indicator such as sleep produces one action, not two.
   - Each action has a one-line reason that names the indicators behind it, such as "Sleep 4.5 h and mood 2/5 may reduce alertness", plus a status dot and the body system it belongs to. Tapping an action opens that system's panel.
-  - If any system is red, a red "Contact your flight surgeon" banner lists the indicators outside the monitor range and their systems.
+  - If any system is red, a red "Contact your flight surgeon" banner lists the indicators outside the monitor range.
   - If everything is within range, the card says "No action needed today. Keep your routine." and suggests the next check-in.
-  - The card updates live with new check-ins and with the what-if toggles, and is marked "Simulated" while a scenario is on.
+  - The card updates live with new check-ins and with the what-if toggles.
   - It also adds one **trend watch** line (see below) for the strongest unfavorable 14-day trend, for example "Body mass has been falling for 14 days. Consider reviewing food intake and appetite, and mention it at your next medical check."
   - Actions use "consider" and "may" wording, and the card ends with "Decision support only, confirm with your medical officer." The action texts and reasons are in `data.js` (`AURA_CONTENT.plan`).
 - **Trend watch (early-warning signal, not a diagnosis).** For every numeric indicator, AURA-CREW fits a simple straight line to the recorded values of the last 14 days.
@@ -67,7 +77,7 @@ While a what-if scenario is on, a "Simulation on" badge shows in the header on e
   - **Where results appear:** in the check-in, the nervous system status, the score, the action plan and trend watch. The panel charts the baseline comparisons plus raw reaction time, memory accuracy and longest sequence.
 - **Hazard legend.** A compact strip of the five NASA HRP hazards under the body figure ("Possible contributing hazards"). Hovering a tag shows a one-line summary and the indicators it *may affect*. Selecting a tag highlights the body systems it may affect and dims the others.
 
-- **What-if scenarios** (Simulate & About tab). Four toggles (skip exercise, sleep deficit, radiation event, spacewalk day) apply illustrative offsets to the latest check-in, including exercise totals, reaction results, breathing, hydration and cabin CO₂, so you can see how indicators and body-system status may shift. A "Simulation · not real data" banner appears while any toggle is on. Nothing is saved, and the trend charts always show recorded data.
+- **What-if scenarios** (Simulate & About tab). Four toggles (skip exercise, sleep deficit, radiation event, spacewalk day) apply illustrative offsets to the latest check-in, including exercise totals, reaction results, breathing, hydration and cabin CO₂, so you can see how indicators and body-system status may shift. A "Simulation, not real data" label appears while any toggle is on. Nothing is saved, and the trend charts always show recorded data.
 - **Indicator score and streak** (Trends tab). A 0–100 daily indicator score (the average of per-indicator points: within range 100, monitor 60, attention 20) with its 7-day average, plus a check-in streak counting consecutive logged days up to today.
 
 ## Roadmap (planned, not implemented)

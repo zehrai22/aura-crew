@@ -207,7 +207,7 @@ window.AURA_CONFIG = {
     // first 3 completed tests (negative = below baseline). A drop of more than 15%
     // is "monitor", more than 30% is "attention".
     perfReaction: {
-      label: 'Reaction speed vs own baseline',
+      label: 'Reaction speed vs baseline',
       short: 'Reaction vs baseline',
       unit: '%',
       decimals: 0,
@@ -221,7 +221,7 @@ window.AURA_CONFIG = {
       input: { min: -100, max: 100, step: 1 }
     },
     perfMemory: {
-      label: 'Working memory vs own baseline',
+      label: 'Working memory vs baseline',
       short: 'Memory vs baseline',
       unit: '%',
       decimals: 0,
